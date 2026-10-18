@@ -1,8 +1,13 @@
 // Canned answers for SABOTEUR_MOCK=1, so the whole game can be played without an API key.
 // Uses the first three library topics; any other topic gets the closest-sounding one.
 import type { Prompt } from "./llm";
+import { mockDiagnose, mockQuestions } from "./autopsy/mock";
+import type { QuestionsRequest } from "./autopsy/schema";
+import { labelKey } from "./learning/labels";
+import type { DiagnoseParams } from "./prompts/autopsyDiagnose";
 import { LIBRARY } from "./offline/library";
 import type { GradeParams } from "./prompts/gradeCorrections";
+import type { NormaliseParams } from "./prompts/normaliseLabels";
 import type { PlantParams } from "./prompts/plantErrors";
 import type { VerifyParams } from "./prompts/verify";
 import type { WriteParams } from "./prompts/writeExplanation";
@@ -28,11 +33,17 @@ export function mockResponse(prompt: Prompt): unknown {
       const p = prompt.params as PlantParams;
       const canned = cannedFor(p.sentences);
       const avoid = new Set(p.avoidIds ?? []);
-      const chosen = Object.keys(canned.errors).map(Number).filter((i) => !avoid.has(`s${i + 1}`)).slice(0, p.count);
+      // Targeted errors first, the way the real planter is asked to: same label, else same type.
+      const targetOf = (i: number) => p.targets?.find((t) => labelKey(t.label) === labelKey(canned.errors[i].label)) ?? p.targets?.find((t) => t.errorType === canned.errors[i].type);
+      const chosen = Object.keys(canned.errors)
+        .map(Number)
+        .filter((i) => !avoid.has(`s${i + 1}`))
+        .sort((a, b) => Number(!!targetOf(b)) - Number(!!targetOf(a)))
+        .slice(0, p.count);
       return {
         errors: chosen.map((i) => {
           const e = canned.errors[i];
-          return { sentenceId: `s${i + 1}`, originalSentence: canned.sentences[i], sabotagedSentence: e.sabotaged, errorType: e.type, explanation: e.explanation, whyTempting: e.tempting, misconceptionLabel: e.label };
+          return { sentenceId: `s${i + 1}`, originalSentence: canned.sentences[i], sabotagedSentence: e.sabotaged, errorType: e.type, explanation: e.explanation, whyTempting: e.tempting, misconceptionLabel: e.label, targetsMisconceptionId: targetOf(i)?.key ?? null };
         }),
       };
     }
@@ -54,6 +65,15 @@ export function mockResponse(prompt: Prompt): unknown {
         }),
         explanations: p.falseFlags.map((f) => ({ sentenceId: f.sentenceId, text: "This statement is accurate as written at this level." })),
       };
+    }
+    case "autopsyDiagnose":
+      return mockDiagnose(prompt.params as DiagnoseParams);
+    case "targetedQuestions":
+      return mockQuestions(prompt.params as QuestionsRequest);
+    case "normaliseLabels": {
+      // Only exact duplicates (after the key's folding) would merge, and keys already fold those.
+      const p = prompt.params as NormaliseParams;
+      return { matches: p.fresh.map((l) => ({ key: l.key, sameAs: null })) };
     }
     default:
       throw new Error(`No mock for prompt ${prompt.name}`);

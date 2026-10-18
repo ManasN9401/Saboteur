@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { saveRound } from "@/lib/roundStore.server";
 import { PlantedErrorSchema, RoundSchema } from "@/lib/schemas";
+import { guard, MAX_BODY, readJson } from "@/lib/security/guard";
 import { newId } from "@/lib/text";
 
 const ReplaySchema = z.object({ round: RoundSchema, errors: z.array(PlantedErrorSchema).min(1).max(6) });
@@ -11,7 +12,11 @@ const ReplaySchema = z.object({ round: RoundSchema, errors: z.array(PlantedError
  * there is nothing to gain by tampering.
  */
 export async function POST(request: Request) {
-  const parsed = ReplaySchema.safeParse(await request.json().catch(() => null));
+  const pass = guard(request, "replay");
+  if (pass instanceof Response) return pass;
+  const body = await readJson(request, MAX_BODY.replay);
+  if ("response" in body) return body.response;
+  const parsed = ReplaySchema.safeParse(body.data);
   if (!parsed.success) return Response.json({ error: "That case couldn't be replayed." }, { status: 400 });
   const { round, errors } = parsed.data;
   const ids = new Set(round.sentences.map((s) => s.id));

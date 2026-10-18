@@ -3,17 +3,16 @@ import { FriendlyError } from "@/lib/errors";
 import { buildDaily, dailyDateOf, isDailyDate } from "@/lib/daily";
 import { getRound, saveRound } from "@/lib/roundStore.server";
 import { SubmissionSchema } from "@/lib/schemas";
+import { guard, MAX_BODY, readJson } from "@/lib/security/guard";
 
 export const maxDuration = 120;
 
 export async function POST(request: Request) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "The request wasn't valid JSON." }, { status: 400 });
-  }
-  const parsed = SubmissionSchema.safeParse(body);
+  const pass = guard(request, "grade");
+  if (pass instanceof Response) return pass;
+  const body = await readJson(request, MAX_BODY.medium);
+  if ("response" in body) return body.response;
+  const parsed = SubmissionSchema.safeParse(body.data);
   if (!parsed.success) return Response.json({ error: "Your flags couldn't be read. Refresh the page and try again." }, { status: 400 });
 
   let stored = getRound(parsed.data.roundId);

@@ -1,10 +1,12 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import type { z } from "zod";
-import { USE_FALLBACKS } from "./config";
+import { MODELS, USE_FALLBACKS } from "./config";
 import { FriendlyError } from "./errors";
 import { extractJSON } from "./json";
 import { mockResponse } from "./mock";
+import { newPolicy, router, type Need, type Policy, type Route } from "./router/router";
+import { budget } from "./security/limits";
+import { callAnthropic, callOpenAI, RouteError, type FailureCategory } from "./router/transport";
 
 export type Effort = "low" | "medium" | "high";
 
@@ -12,11 +14,14 @@ export type Effort = "low" | "medium" | "high";
 export interface Prompt<P = unknown> {
   name: string;
   params: P;
+  /** The Claude model this prompt was written for; the router uses it exactly when Anthropic is set up. */
   model: string;
   effort: Effort;
   system: string;
   user: string;
   maxTokens?: number;
+  /** Pictures sent ahead of the text (marked work for the autopsy). Never logged or kept. */
+  images?: { mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif"; data: string }[];
 }
 
 /**
@@ -31,48 +36,72 @@ export class LLMError extends FriendlyError {
   }
 }
 
-let client: Anthropic | null = null;
-function getClient() {
-  if (!client) {
-    if (!process.env.ANTHROPIC_API_KEY) throw new LLMError("The server has no ANTHROPIC_API_KEY set. Add it to .env.local.", undefined, true);
-    client = new Anthropic();
-  }
-  return client;
-}
-
 export const isMock = () => process.env.SABOTEUR_MOCK === "1";
 
-async function complete(prompt: Prompt, user: string): Promise<string> {
-  const api = getClient();
-  const sonnet = prompt.model.startsWith("claude-sonnet");
-  try {
-    const response = await api.beta.messages.create({
-      model: prompt.model,
-      max_tokens: prompt.maxTokens ?? 16000,
-      system: prompt.system,
-      output_config: { effort: prompt.effort },
-      messages: [{ role: "user", content: user }],
-      ...(sonnet && USE_FALLBACKS ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
-    });
-    if (response.stop_reason === "refusal") throw new LLMError("The model declined to write this round. Try rephrasing the topic.");
-    if (response.stop_reason === "max_tokens") throw new LLMError("The model ran out of room mid-answer. Try a narrower topic.");
-    const text = response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-    if (!text.trim()) throw new LLMError("The model returned an empty answer.");
-    return text;
-  } catch (err) {
-    if (err instanceof LLMError) throw err;
-    if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError)
-      throw new LLMError("The API key was rejected. Check ANTHROPIC_API_KEY in .env.local.", err, true);
-    if (err instanceof Anthropic.RateLimitError) throw new LLMError("Too many requests right now. Wait a few seconds and try again.", err, true);
-    if (err instanceof Anthropic.APIConnectionError) throw new LLMError("Couldn't reach the AI service. Check your connection and try again.", err, true);
-    if (err instanceof Anthropic.APIError)
-      throw new LLMError("The AI service had a problem. Try again in a moment.", err, typeof err.status !== "number" || err.status >= 500);
-    throw new LLMError("Couldn't reach the AI service. Check your connection and try again.", err, true);
-  }
+/** Routes tried per request before giving up. */
+const MAX_ROUTES = 6;
+/** Failures that say the AI can't be reached right now, rather than that this request is at fault. */
+const AVAILABILITY: FailureCategory[] = ["rate_limit", "quota", "auth", "server", "not_found"];
+
+/** Provider error text for the log: short, and with anything that looks like data (an echoed image) cut out. */
+const scrub = (s: string) => s.replace(/[A-Za-z0-9+/=_-]{40,}/g, "…").slice(0, 160);
+
+const EFFORT_TIER: Record<Effort, number> = { low: 1, medium: 2, high: 3 };
+
+/** What a prompt needs from a model: generation steps want a strong one, grading a quick one. */
+export function needOf(prompt: Prompt): Need {
+  const strong = prompt.model === MODELS.generate;
+  return {
+    task: prompt.name,
+    minCapability: strong ? 3 : 1,
+    effortTier: EFFORT_TIER[prompt.effort] + (strong ? 1 : 0),
+    vision: !!prompt.images?.length,
+    preferredModel: prompt.model,
+  };
 }
 
 /**
- * Ask Claude for JSON and validate it with Zod. If parsing or validation fails, retry once
+ * One reply from the first route that gives one (lib/router). A failure cools what it should (a rate
+ * limit the key, a missing model the route) and the next route is tried; the error says why if none work.
+ */
+async function complete(prompt: Prompt, user: string, policy: Policy): Promise<{ text: string; route: Route }> {
+  const r = router();
+  const need = needOf(prompt);
+  const failures: FailureCategory[] = [];
+  for (let attempt = 0; attempt < MAX_ROUTES; attempt++) {
+    const route = await r.select(need, policy);
+    if (!route) break;
+    // The server's daily allowance of AI calls (AI_DAILY_BUDGET): past it, the AI counts as unavailable.
+    if (!budget().spend()) {
+      r.release(route);
+      throw new LLMError("The AI has done all it can for today. Rounds are being built offline until tomorrow.", "daily AI budget spent", true);
+    }
+    policy.tried.add(route.key);
+    try {
+      const req = { system: prompt.system, user, maxTokens: prompt.maxTokens ?? 16000, effort: prompt.effort, images: prompt.images };
+      const text = route.provider === "anthropic" ? await callAnthropic(route, req, USE_FALLBACKS, r.env) : await callOpenAI(route, req, r.fetchImpl, r.env);
+      return { text, route };
+    } catch (err) {
+      const e = err instanceof RouteError ? err : new RouteError("server", err instanceof Error ? err.message : "unknown error");
+      r.failed(route, need.task, e.category, e.message, e.retryAt);
+      failures.push(e.category);
+      // An unreachable host won't answer on its next model or key either: try another provider.
+      if (e.network) policy.avoid.add(route.provider);
+      console.warn(`[router] ${prompt.name}: ${route.key} failed (${e.category}${e.status ? ` ${e.status}` : ""}): ${scrub(e.message)}`);
+    }
+  }
+  const why = await r.explain(need, policy);
+  if (!failures.length) {
+    const none = !r.hasRoutes();
+    throw new LLMError(none ? "No AI provider is set up. Add a key to .env.local (see docs/router.md)." : need.vision ? "None of the connected AI models can read pictures right now." : "Every AI model is busy right now. Try again in a minute.", why, true);
+  }
+  const unavailable = failures.every((f) => AVAILABILITY.includes(f));
+  if (failures.includes("refusal") && !unavailable) throw new LLMError("The model declined to write this. Try rephrasing the topic.", why);
+  throw new LLMError(unavailable ? "Couldn't reach a working AI model right now. Try again in a minute." : "The AI returned something we couldn't use. Try again.", why, unavailable);
+}
+
+/**
+ * Ask for JSON and validate it with Zod. If parsing or validation fails, ask again (on another route)
  * with the error appended so the model can correct itself.
  */
 export async function callJSON<T>(prompt: Prompt, schema: z.ZodType<T>): Promise<T> {
@@ -82,18 +111,23 @@ export async function callJSON<T>(prompt: Prompt, schema: z.ZodType<T>): Promise
     return parsed.data;
   }
 
+  const policy = newPolicy();
   let user = prompt.user;
   let lastError = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = await complete(prompt, user);
+    const { text, route } = await complete(prompt, user, policy);
     try {
       const parsed = schema.safeParse(extractJSON(text));
-      if (parsed.success) return parsed.data;
+      if (parsed.success) {
+        router().succeeded(route, prompt.name);
+        return parsed.data;
+      }
       lastError = parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }
-    user = `${prompt.user}\n\nYour previous reply could not be used: ${lastError}\nReply again with only the corrected JSON object.`;
+    router().failed(route, prompt.name, "invalid_output", lastError);
+    user = `${prompt.user}\n\nA previous reply could not be used: ${lastError}\nReply again with only the corrected JSON object.`;
   }
   console.error(`[llm] ${prompt.name} returned invalid JSON twice: ${lastError}`);
   throw new LLMError("The AI returned something we couldn't read. Try again.");

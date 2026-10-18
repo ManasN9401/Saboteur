@@ -26,8 +26,11 @@ export function sabotage(sentences: Sentence[], errors: PlantedError[]): Sentenc
   return sentences.map((s) => ({ id: s.id, text: byId.get(s.id) ?? s.text }));
 }
 
-/** Drop anything the planter got wrong: unknown or repeated sentences, and rewrites that changed nothing. */
-export function cleanErrors(raw: PlantedError[], sentences: Sentence[], taken: Set<string> = new Set()): PlantedError[] {
+/**
+ * Drop anything the planter got wrong: unknown or repeated sentences, and rewrites that changed nothing.
+ * A claimed target is kept only if it's one of the misconceptions asked for.
+ */
+export function cleanErrors(raw: PlantedError[], sentences: Sentence[], taken: Set<string> = new Set(), targetIds: Set<string> = new Set()): PlantedError[] {
   const textById = new Map(sentences.map((s) => [s.id, s.text]));
   const seen = new Set(taken);
   const out: PlantedError[] = [];
@@ -36,7 +39,8 @@ export function cleanErrors(raw: PlantedError[], sentences: Sentence[], taken: S
     if (!original || seen.has(e.sentenceId)) continue;
     if (e.sabotagedSentence.trim() === original.trim()) continue;
     seen.add(e.sentenceId);
-    out.push({ ...e, originalSentence: original, targetsMisconceptionId: e.targetsMisconceptionId ?? undefined });
+    const target = e.targetsMisconceptionId && targetIds.has(e.targetsMisconceptionId) ? e.targetsMisconceptionId : undefined;
+    out.push({ ...e, originalSentence: original, targetsMisconceptionId: target });
   }
   return out;
 }
@@ -57,10 +61,11 @@ async function plant(
 ): Promise<PlantedError[]> {
   const taken = new Set(keep.map((e) => e.sentenceId));
   const out = await callJSON(
-    plantErrorsPrompt({ sentences, count, level: req.level, difficulty: req.difficulty, avoidIds: [...taken], rejected }),
+    plantErrorsPrompt({ sentences, count, level: req.level, difficulty: req.difficulty, avoidIds: [...taken], rejected, targets: req.targets }),
     PlantOutputSchema,
   );
-  return [...keep, ...cleanErrors(out.errors as PlantedError[], sentences, taken).slice(0, count)];
+  const targetIds = new Set((req.targets ?? []).map((t) => t.key));
+  return [...keep, ...cleanErrors(out.errors as PlantedError[], sentences, taken, targetIds).slice(0, count)];
 }
 
 /**

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { extractJSON } from "./json";
 import { cleanErrors, generateRound, sabotage } from "./pipeline";
+import { plantErrorsPrompt } from "./prompts/plantErrors";
 import { PlantOutputSchema, VerifyOutputSchema, type PlantedError } from "./schemas";
 
 const sentences = [
@@ -80,5 +81,29 @@ describe("generateRound (mock LLM)", () => {
     // The round sent to the browser carries no answers.
     expect(JSON.stringify(round)).not.toContain("whyTempting");
     expect(round.topicId).toMatch(/^[a-z0-9-]+$/);
+  });
+});
+
+describe("targets", () => {
+  it("keeps a claimed target only if it was asked for", () => {
+    const out = cleanErrors(
+      [
+        { ...planted("s1", "A is false."), targetsMisconceptionId: "asked" },
+        { ...planted("s2", "B is false."), targetsMisconceptionId: "made-up" },
+      ],
+      sentences,
+      new Set(),
+      new Set(["asked"]),
+    );
+    expect(out.map((e) => e.targetsMisconceptionId)).toEqual(["asked", undefined]);
+  });
+
+  it("tells the planter what to target, and only when asked", () => {
+    const base = { sentences, count: 2, level: "A-level", difficulty: "subtle" as const };
+    const plain = plantErrorsPrompt(base);
+    const aimed = plantErrorsPrompt({ ...base, targets: [{ key: "mito", label: "Photosynthesis happens in the mitochondria", errorType: "swapped_terms" }] });
+    expect(plain.system).not.toContain("targetsMisconceptionId");
+    expect(aimed.user).toContain('id mito: "Photosynthesis happens in the mitochondria" (swapped_terms)');
+    expect(aimed.system).toContain("Never force one that doesn't fit");
   });
 });

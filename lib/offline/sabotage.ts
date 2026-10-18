@@ -273,9 +273,9 @@ const RELIABILITY: Record<string, number> = { direction: 1, number: 1, "number-w
 
 /**
  * Choose `count` errors in different sentences, spreading the error types and preferring
- * rules whose subtlety matches the difficulty. Deterministic for a given seed.
+ * rules whose subtlety matches the difficulty (and any `prefer`red types). Deterministic for a given seed.
  */
-export function chooseErrors(sentences: Sentence[], count: number, difficulty: Difficulty, seed = 1, avoid: Set<string> = new Set()): Candidate[] {
+export function chooseErrors(sentences: Sentence[], count: number, difficulty: Difficulty, seed = 1, avoid: Set<string> = new Set(), prefer: ErrorType[] = []): Candidate[] {
   // mulberry32: small seeded PRNG so a round can be reproduced in tests.
   let a = seed >>> 0;
   const rand = () => {
@@ -287,7 +287,8 @@ export function chooseErrors(sentences: Sentence[], count: number, difficulty: D
   const pool = sentences
     .filter((s) => !avoid.has(s.id))
     .flatMap((s) => candidatesFor(s, sentences, difficulty))
-    .map((c) => ({ c, score: RELIABILITY[c.rule] * 2 - Math.abs(c.subtlety - PREFERRED[difficulty]) + rand() * 0.6 }))
+    // Types the player keeps falling for (a targeted round) jump the queue.
+    .map((c) => ({ c, score: RELIABILITY[c.rule] * 2 - Math.abs(c.subtlety - PREFERRED[difficulty]) + rand() * 0.6 + (prefer.includes(c.errorType) ? 3 : 0) }))
     .sort((a, b) => b.score - a.score);
 
   const chosen: Candidate[] = [];

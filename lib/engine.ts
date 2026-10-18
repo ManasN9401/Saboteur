@@ -4,6 +4,7 @@ import { FriendlyError } from "./errors";
 import { generateOffline } from "./offline/generate";
 import { isMock, LLMError } from "./llm";
 import { generateRound, type Progress } from "./pipeline";
+import { router } from "./router/router";
 import type { GenerateRequest, PlantedError, Round } from "./schemas";
 
 export type Engine = "llm" | "offline";
@@ -15,7 +16,13 @@ export type Engine = "llm" | "offline";
  */
 export function engineMode(): { engine: Engine; reason: string } {
   if (process.env.SABOTEUR_ENGINE === "offline") return { engine: "offline", reason: "Offline mode is switched on." };
-  if (isMock() || process.env.ANTHROPIC_API_KEY) return { engine: "llm", reason: "Connected to Claude." };
+  if (isMock()) return { engine: "llm", reason: "Connected to the stand-in AI (mock mode)." };
+  const providers = router().providers();
+  if (providers.length) {
+    const names = providers.map((p) => p.name);
+    const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+    return { engine: "llm", reason: names.length === 1 && names[0] === "Anthropic" ? "Connected to Claude." : `Connected through ${list}.` };
+  }
   return { engine: "offline", reason: "No AI is connected." };
 }
 

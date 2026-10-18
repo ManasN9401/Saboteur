@@ -13,6 +13,9 @@ export const EFFORT = {
   plant: "medium",
   verify: "medium",
   grade: "low",
+  /** Wrong Answer Autopsy: diagnosing wrong answers, and writing check questions. */
+  autopsy: "medium",
+  questions: "medium",
 } as const;
 
 /**

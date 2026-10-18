@@ -95,6 +95,14 @@ export type RoundResult = z.infer<typeof RoundResultSchema>;
 
 /* ---------- API request bodies ---------- */
 
+/** A misconception a round should try to plant again (V06-05). `key` is the profile's id for it. */
+export const TargetSchema = z.object({
+  key: z.string().min(1).max(80),
+  label: z.string().trim().min(1).max(200),
+  errorType: ErrorTypeSchema,
+});
+export type Target = z.infer<typeof TargetSchema>;
+
 export const GenerateRequestSchema = z.object({
   topic: z.string().trim().min(2, "Give the topic at least a couple of words.").max(200),
   level: z.string().trim().min(2).max(80),
@@ -104,6 +112,8 @@ export const GenerateRequestSchema = z.object({
   daily: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   /** The player chose to play without AI on this device. */
   engine: z.enum(["auto", "offline"]).optional(),
+  /** Misconceptions this player keeps falling for: plant at least one of them if the topic allows. */
+  targets: z.array(TargetSchema).max(3).optional(),
 });
 export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
 
@@ -112,7 +122,6 @@ export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
 export const ExplanationOutputSchema = z.object({
   sentences: z.array(SentenceSchema).min(6).max(20),
 });
-export type ExplanationOutput = z.infer<typeof ExplanationOutputSchema>;
 
 export const PlantOutputSchema = z.object({
   errors: z
@@ -120,14 +129,12 @@ export const PlantOutputSchema = z.object({
     .min(1)
     .max(6),
 });
-export type PlantOutput = z.infer<typeof PlantOutputSchema>;
 
 export const VerifyOutputSchema = z.object({
   plantedChecks: z.array(z.object({ sentenceId: z.string(), valid: z.boolean(), reason: z.string() })),
   unintendedIssues: z.array(z.object({ sentenceId: z.string(), issue: z.string() })),
   tooObvious: z.array(z.string()),
 });
-export type VerifyOutput = z.infer<typeof VerifyOutputSchema>;
 
 export const GradeOutputSchema = z.object({
   grades: z.array(

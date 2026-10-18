@@ -173,3 +173,37 @@ describe("generateOffline", () => {
     for (const e of errors) expect(notes).toContain(e.originalSentence);
   });
 });
+
+describe("targeted rounds (V06-05)", () => {
+  const quiet = () => {};
+  const entry = LIBRARY[0];
+  const [first] = Object.values(entry.errors);
+
+  it("plants the targeted misconception from the library first", async () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const target = { key: "t-exact", label: first.label, errorType: first.type };
+      const { errors } = await generateOffline({ topic: entry.title, level: "A-level", difficulty: "subtle", targets: [target] }, quiet, { entry, seed });
+      expect(errors.some((e) => e.misconceptionLabel === first.label && e.targetsMisconceptionId === "t-exact")).toBe(true);
+    }
+  });
+
+  it("falls back to a rule that makes the same kind of error", async () => {
+    const sentences = entry.sentences.map((text, i) => ({ id: `s${i + 1}`, text }));
+    const curatedTypes = new Set(Object.values(entry.errors).map((e) => e.type));
+    const ruleOnly = [...new Set(sentences.flatMap((s) => candidatesFor(s, sentences, "subtle")).map((c) => c.errorType))].find((t) => !curatedTypes.has(t));
+    if (!ruleOnly) return; // nothing to test on this entry
+    const { errors } = await generateOffline({ topic: entry.title, level: "A-level", difficulty: "subtle", targets: [{ key: "t-type", label: "Some other belief", errorType: ruleOnly }] }, quiet, { entry, seed: 3 });
+    expect(errors.find((e) => e.targetsMisconceptionId === "t-type")?.errorType).toBe(ruleOnly);
+  });
+
+  it("chooseErrors puts preferred types first", () => {
+    const sentences = entry.sentences.map((text, i) => ({ id: `s${i + 1}`, text }));
+    const types = [...new Set(sentences.flatMap((s) => candidatesFor(s, sentences, "subtle")).map((c) => c.errorType))];
+    for (const t of types) expect(chooseErrors(sentences, 1, "subtle", 7, new Set(), [t])[0].errorType).toBe(t);
+  });
+
+  it("leaves untargeted rounds alone", async () => {
+    const { errors } = await generateOffline({ topic: entry.title, level: "A-level", difficulty: "subtle" }, quiet, { entry, seed: 5 });
+    expect(errors.every((e) => !e.targetsMisconceptionId)).toBe(true);
+  });
+});

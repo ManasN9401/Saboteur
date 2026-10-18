@@ -13,6 +13,9 @@ interface StoredRound {
   expiresAt: number;
 }
 
+/** Open rounds held at once; past this the oldest go first (a flood of replays can't exhaust memory). */
+const MAX_ROUNDS = 5000;
+
 const globalStore = globalThis as unknown as { __saboteurRounds?: Map<string, StoredRound> };
 const rounds = (globalStore.__saboteurRounds ??= new Map());
 
@@ -22,6 +25,8 @@ function sweep(now = Date.now()) {
 
 export function saveRound(round: Round, errors: PlantedError[]) {
   sweep();
+  rounds.delete(round.id);
+  while (rounds.size >= MAX_ROUNDS) rounds.delete(rounds.keys().next().value!);
   rounds.set(round.id, { round, errors, expiresAt: Date.now() + ROUND_TTL_MS });
 }
 

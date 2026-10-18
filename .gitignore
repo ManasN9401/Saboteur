@@ -13,10 +13,6 @@
 # testing
 /coverage
 
-# python
-__pycache__/
-*.py[cod]
-
 # next.js
 /.next/
 /out/
@@ -45,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 !.env.local.example
 /assets-src/
+__pycache__/
+/eval-out
+# The router's learned scores (lib/router)
+/.saboteur/
