@@ -1,6 +1,6 @@
 # v0.5 · Performance, efficiency and installability
 
-> Status: ☐ · Estimate: ~4–5 days, plus ongoing checks · Track: craft · Depends on: v0.4 (measure after the art lands)
+> Status: ◐ (baseline measured 17 Oct: [docs/perf/baseline-v0.4.md](../../perf/baseline-v0.4.md)) · Estimate: ~4–5 days, plus ongoing checks · Track: craft · Depends on: v0.4 (measure after the art lands)
 
 ## Goal
 Hit every number in [performance-budgets.md](../00-principles/performance-budgets.md) on a cheap phone,

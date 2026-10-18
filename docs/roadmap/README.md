@@ -37,8 +37,8 @@ What makes it feel like a prototype:
 | **v0.3** | Identity: profiles, streaks, daily case, customisation, QoL | Weeks 1–2 | v0.2 shell | [v0.3-identity](v0.3-identity/) |
 | **v0.4** | Art and motion: rebuilt props, living desk, sound | Weeks 2–3 (assets start in week 1) | v0.2 | [v0.4-art-and-motion](v0.4-art-and-motion/) |
 | **v0.5** | Performance: budgets enforced, smooth on a cheap phone | Week 3–4 (ongoing) | v0.4 | [v0.5-performance](v0.5-performance/) |
-| **v0.6** | Learning loop: calibration, Misconception Profile, personalised rounds (spec Phase 2) | Weeks 4–5 | v0.3 profiles | [v0.6-learning-loop](v0.6-learning-loop/) |
-| **v0.7** | Wrong Answer Autopsy (spec Phase 3) | Week 5–6 | v0.6 profile | [v0.7-autopsy](v0.7-autopsy/) |
+| **v0.6** ☑ | Learning loop: calibration, Misconception Profile, personalised rounds (spec Phase 2) | Weeks 4–5 | v0.3 profiles | [v0.6-learning-loop](v0.6-learning-loop/) |
+| **v0.7** ☑ | Wrong Answer Autopsy (spec Phase 3) | Week 5–6 | v0.6 profile | [v0.7-autopsy](v0.7-autopsy/) |
 | **v0.8** | Confusables Trainer and Root Gap Finder (spec Phase 4) | Weeks 6–7 | v0.6 | [v0.8-confusables-rootgap](v0.8-confusables-rootgap/) |
 | **v0.9** | Accounts, database, sync, durable rounds | Week 7 (can move earlier) | v0.3 data model | [v0.9-accounts-and-sync](v0.9-accounts-and-sync/) |
 | **v1.0** | Launch: a11y, reliability, demo mode, legal, analytics | Week 8 | everything | [v1.0-launch](v1.0-launch/) |

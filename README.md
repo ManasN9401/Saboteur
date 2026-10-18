@@ -10,7 +10,7 @@ screen, grading, and the reveal screen.
 
 ```bash
 npm install
-cp .env.local.example .env.local   # then set ANTHROPIC_API_KEY
+cp .env.local.example .env.local   # then set any AI provider key (docs/router.md)
 npm run dev                        # http://localhost:3000
 ```
 
@@ -24,6 +24,10 @@ npm test            # Vitest: scoring, diff, pipeline (mock LLM), JSON parsing
 npm run typecheck
 npm run lint
 npm run build && npm start
+npm run eval:targeting            # how often targeted rounds plant a target (offline; add `-- llm` for the AI)
+npm run eval:autopsy              # autopsy diagnoses on 15 fixture worksheets → eval-out/ for review
+node e2e/learning-loop.mjs DIR    # v0.6 end to end against a running server (see the file's header)
+node e2e/autopsy.mjs DIR          # v0.7 autopsy end to end (server with SABOTEUR_MOCK=1)
 ```
 
 `GET /api/health` is the Phase 0 smoke test: one validated JSON round trip through `callJSON`.
@@ -50,11 +54,13 @@ npm run build && npm start
 - `lib/prefs.ts`: settings become attributes on `<html>` (`data-theme`, `data-pen`, `data-ink`,
   `data-motion`…), applied before first paint by an inline script, so a chosen theme never flashes.
 - Models, effort levels and point values live in `lib/config.ts`.
+- Hosting and security (rate limits, AI budget, headers): [docs/deploy.md](docs/deploy.md).
+- Requests go through a model router (`lib/router/`, [docs/router.md](docs/router.md)): Anthropic, OpenRouter, Groq, Gemini, NVIDIA, Cohere, LLM7 and Kilo, whichever have keys.
 
 ## Offline mode (no AI)
 
-When there is no `ANTHROPIC_API_KEY`, when `SABOTEUR_ENGINE=offline`, or when the AI can't be reached
-mid-request (bad key, rate limit, outage, no network), Saboteur builds and marks rounds with rules:
+When no AI provider key is set, when `SABOTEUR_ENGINE=offline`, or when no model can be reached
+mid-request (every route rate-limited, refused or down), Saboteur builds and marks rounds with rules:
 
 - **Source text** (must be correct, since every unchanged sentence counts as true), in this order: the
   student's pasted notes; a built-in library of 30 topics across ten subjects (`lib/offline/library.ts`
