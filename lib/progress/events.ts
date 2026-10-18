@@ -1,5 +1,6 @@
 // One event moves progress: a round completed. Pure: (stats, event) → (stats, what changed), so the
 // round-end strip can show exactly what happened and tests can replay any history.
+import { buildLearning } from "../learning/model";
 import { emptyStats, type Stats } from "../profile/schema";
 import type { Difficulty } from "../schemas";
 import { brierScore, confidentMistakes, roundJudgements } from "../scoring";
@@ -32,6 +33,8 @@ export interface CompletionEvent {
   /** The daily case's date, when this round is one. */
   daily?: string;
   replay?: boolean;
+  /** A review case from the Leitner queue. */
+  review?: boolean;
 }
 
 export interface XpPart {
@@ -55,6 +58,8 @@ export interface ProgressDelta {
   day: string;
   daily: boolean;
   badges: string[];
+  /** One sentence from the Misconception Profile about this round, for the reveal. */
+  insight?: string | null;
 }
 
 const AWARDED_CAP = 400;
@@ -98,6 +103,7 @@ export function eventFromRecord(record: RoundRecord, tz: string, at = record.pla
     engine: round.engine ?? "llm",
     daily: record.daily,
     replay: !!record.replayOf,
+    review: !!record.review,
   };
 }
 
@@ -212,5 +218,5 @@ export function rebuildStats(records: Record<string, RoundRecord>, tz: string): 
     const e = eventFromRecord(r, tz, r.playedAt ?? r.round.createdAt);
     if (e) stats = roundCompleted(stats, e).stats;
   }
-  return stats;
+  return { ...stats, learning: buildLearning(records) };
 }

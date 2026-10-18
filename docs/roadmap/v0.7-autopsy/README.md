@@ -1,6 +1,6 @@
 # v0.7 · Wrong Answer Autopsy
 
-> Status: ☐ · Estimate: ~5 days · Track: product · Depends on: v0.6 (Misconception Profile) · Spec: §6.3, §10.6, §10.7, Phase 3
+> Status: ☑ (17 Oct; real-model eval and the manual review outstanding, see Progress) · Estimate: ~5 days · Track: product · Depends on: v0.6 (Misconception Profile) · Spec: §6.3, §10.6, §10.7, Phase 3
 
 ## Goal
 The student brings marked work they got wrong (pasted text first, then a photo, screenshot or PDF page).
@@ -59,3 +59,28 @@ and confirmed ones go into the profile with targeted check questions.
 | V07-08 | *(flexible, v0.7b)* Image/PDF intake with vision; privacy test | L |
 | V07-09 | Menu: unlock the Autopsy folder; tutorial card | S |
 | V07-10 | Eval script plus fixtures (`scripts/eval/autopsy.ts`) | M |
+
+## Progress
+
+**Shipped (17 Oct).** Verified end to end against the mock model (`e2e/autopsy.mjs`, 10 checks: paste →
+toe tags → check questions → report → corkboard, then a photo on a phone) and offline (manual logging).
+
+| Task | State | Notes |
+|---|---|---|
+| V07-01 schemas, prompts, mocks | ☑ | `lib/autopsy/schema.ts`; `lib/prompts/autopsyDiagnose.ts` (Sonnet, medium effort; reads a picture when one is sent) and `targetedQuestions.ts`. Diagnoses: misconception or slip, label, error type, explanation, the right idea, confidence, a probe question below 0.6, subject and a short revision topic. `tidy()` enforces one per item and drops probes the model shouldn't have asked |
+| V07-02 routes | ☑ | `/api/autopsy/diagnose` (NDJSON progress) and `/api/autopsy/questions`. Offline, or if the AI is unreachable, both say so plainly |
+| V07-03 intake parser | ☑ | `lib/autopsy/parse.ts`, 10 formats tested (labelled blocks, numbered lists, tab/markdown/CSV tables with columns in any order, separators, inline labels, bracketed corrections, bare three-line blocks, multi-line questions). Matching answers and missing corrections are set aside |
+| V07-04 tray and toe tags | ☑ | `/autopsy`: steel tray (CSS until the generated tray arrives), loupe while examining, toe tags with That's it / Not quite / Just a slip; a disputed slip lets the student name the belief |
+| V07-05 treatment | ☑ | `components/autopsy/CheckQuestions.tsx`: one question at a time, confidence bet, right answer and trap both explained |
+| V07-06 profile | ☑ | `lib/learning/autopsy.ts`: confirmed / rejected / resolved with history on each misconception. Confirmed = a miss weighted like a confident one, into review box 0. Check questions all right = resolved and up a box; their bets count towards calibration. Coroner badge on the first confirmation |
+| V07-07 offline | ☑ | Blank tags: "What did you believe?" plus an optional kind of mistake |
+| V07-08 photo intake | ◐ | Photos and screenshots: shrunk to 1600 px and re-encoded as JPEG in the browser, read once by the model, never stored or logged (tests on success and failure paths; e2e checks browser storage). **PDF pages not yet** (pdf.js rendering): the page suggests a screenshot |
+| V07-09 menu | ☑ | Autopsy folder in the menu; a three-step first-visit card on the page |
+
+**Acceptance still to run with a real key:** `npm run eval:autopsy` diagnoses the 15 fixture worksheets
+(`lib/autopsy/fixtures.ts`, 50 wrong answers, 8 planted slips) and writes a side-by-side report to
+`eval-out/` for the manual "sensible in ≥ 80%" review; it prints the slip rate (target ≥ 70%). Against
+the mock: 50/50 kinds, 8/8 slips (a pipeline check only).
+
+**Open question:** check questions don't recur in the Review queue yet. Confirmed misconceptions do join the
+queue, and a review case targets them with a planted round.

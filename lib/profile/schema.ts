@@ -1,6 +1,7 @@
 // Shapes of everything a player owns. Every blob read back from storage is parsed with these, so a
 // field added later needs a default here (old saves must still parse).
 import { z } from "zod";
+import { LearningSchema } from "../learning/schema";
 
 export const AVATARS = ["owl", "fox", "raven", "otter", "cat", "hound", "heron", "hare", "badger", "stag", "magpie", "tortoise"] as const;
 export const PROFILE_COLOURS = ["#b3261e", "#1f4e8c", "#2f6b3a", "#6a3d8f", "#9a5b13", "#2d5f6b"] as const;
@@ -102,6 +103,8 @@ export const StatsSchema = z.object({
   awarded: z.array(z.string()).default([]),
   /** The latest time seen, to notice a device clock that jumps backwards. */
   lastSeenAt: z.string().nullable().default(null),
+  /** Misconceptions, calibration and the review queue (v0.6). Null until first built from saved rounds. */
+  learning: LearningSchema.nullable().default(null),
 });
 export type Stats = z.infer<typeof StatsSchema>;
 

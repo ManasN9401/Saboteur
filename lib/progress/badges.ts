@@ -1,4 +1,5 @@
 // The badge list, as data (docs/roadmap/v0.3-identity/streaks.md#badges). Art is in public/assets/badges.
+import { hasConfirmed } from "../learning/autopsy";
 import type { Stats } from "../profile/schema";
 import type { CompletionEvent } from "./events";
 
@@ -56,8 +57,14 @@ export const BADGES: Badge[] = [
   { id: "did-the-reading", name: "Did the reading", description: "Five cases built from your own notes.", test: ({ stats }) => stats.totals.notesRounds >= 5 },
   { id: "off-the-grid", name: "Off the grid", description: "Close a case built offline, without AI.", test: ({ event: e }) => e.engine === "offline" },
   { id: "night-owl", name: "Night owl", description: "Close a case between midnight and 4 am.", test: ({ event: e }) => e.hour >= 0 && e.hour < 4 },
+  {
+    id: "reformed",
+    name: "Reformed",
+    description: "Retire a misconception from review: catch it on schedule four times running.",
+    test: ({ stats }) => (stats.learning?.reviews.retired ?? 0) >= 1,
+  },
   { id: "comeback", name: "Comeback", description: "Repair a broken streak with three cases in a day.", test: ({ repaired }) => repaired },
-  { id: "coroner", name: "Coroner", description: "Your first autopsy.", later: "Arrives with Autopsy", test: () => false },
+  { id: "coroner", name: "Coroner", description: "Confirm a misconception in your own marked work (Autopsy).", test: ({ stats }) => hasConfirmed(stats.learning) },
   { id: "line-up", name: "Line-up", description: "Your first confusables drill.", later: "Arrives with drills", test: () => false },
   { id: "root-cause", name: "Root cause", description: "Your first root-gap trace.", later: "Arrives with Root Gap", test: () => false },
 ];

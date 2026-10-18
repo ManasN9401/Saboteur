@@ -18,6 +18,10 @@ export const RoundRecordSchema = z.object({
   daily: z.string().optional(),
   /** A replay of an earlier case, for revision: never scored. */
   replayOf: z.string().optional(),
+  /** A review case (Leitner queue), built to target misconceptions that were due. */
+  review: z.boolean().optional(),
+  /** Misconception keys this round was asked to target ("Drill this", review cases). */
+  targets: z.array(z.string()).optional(),
 });
 export type RoundRecord = z.infer<typeof RoundRecordSchema>;
 

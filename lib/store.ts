@@ -1,6 +1,7 @@
 // Browser persistence behind one small interface, so it can move to a database later. Everything here
 // belongs to the active profile (lib/profile/profiles.ts); switching profile switches what you see.
-import type { Flag, Round, RoundResult, Submission } from "./schemas";
+import { z } from "zod";
+import { TargetSchema, type Flag, type Round, type RoundResult, type Submission } from "./schemas";
 import { activeId, boot, readRecords } from "./profile/profiles";
 import { KEYS, SESSION } from "./storage/keys";
 import { getRaw, read, remove, setRaw, write } from "./storage/kv";
@@ -9,7 +10,6 @@ import { DraftSchema, NotesLibrarySchema, SetupSettingsSchema, TopicsSchema, typ
 import { slugify } from "./text";
 
 export type { RoundRecord, SetupSettings, Topics };
-export { subscribe } from "./storage/kv";
 
 const MAX_ROUNDS = 40;
 /** Saved notes per profile (Q6): beyond this the oldest are dropped. */
@@ -47,7 +47,7 @@ function session(key: string, value?: string | null): string | null {
 }
 
 export const store = {
-  saveRound(round: Round, notes?: string, extra?: Pick<RoundRecord, "daily" | "replayOf">) {
+  saveRound(round: Round, notes?: string, extra?: Pick<RoundRecord, "daily" | "replayOf" | "review" | "targets">) {
     const records = readRecords();
     records[round.id] = { ...records[round.id], ...extra, round, notes };
     writeRecords(records);
@@ -139,4 +139,26 @@ export const store = {
     session(SESSION.autostart, null);
     return on;
   },
+
+  /** Ask the next round to target these misconceptions (and say whether it's a review case). */
+  requestDrill(drill: Drill) {
+    session(SESSION.drill, JSON.stringify(drill));
+  },
+
+  peekDrill(): Drill | null {
+    const raw = session(SESSION.drill);
+    if (!raw) return null;
+    try {
+      return DrillSchema.parse(JSON.parse(raw));
+    } catch {
+      return null;
+    }
+  },
+
+  clearDrill() {
+    session(SESSION.drill, null);
+  },
 };
+
+const DrillSchema = z.object({ targets: z.array(TargetSchema).min(1).max(3), review: z.boolean().default(false) });
+export type Drill = z.infer<typeof DrillSchema>;

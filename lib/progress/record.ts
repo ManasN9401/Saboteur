@@ -1,5 +1,7 @@
 // The bridge between a graded round and the player's progress (browser only).
-import { activeId, getProfile, getStats, saveStats } from "../profile/profiles";
+import { buildLearning, factsFromRecord, learnFromRound } from "../learning/model";
+import { insightFor } from "../learning/views";
+import { activeId, getProfile, getStats, readRecords, saveStats } from "../profile/profiles";
 import { store } from "../store";
 import { SESSION } from "../storage/keys";
 import { getRaw, remove, setRaw } from "../storage/kv";
@@ -17,7 +19,14 @@ export function recordCompletion(roundId: string): ProgressDelta | null {
   if (!event) return null;
   const id = activeId();
   const restDays = getProfile(id)?.prefs.restDays ?? [];
-  const { stats, delta } = roundCompleted(getStats(id), event, { restDays });
+  // Learn first (replays and repeat dailies teach as much as scored rounds), so badges can see it.
+  // A profile from before v0.6 learns from all its saved rounds the first time.
+  const before = getStats(id);
+  const facts = factsFromRecord(record);
+  let learning = before.learning ?? buildLearning(readRecords(id));
+  if (facts) learning = learnFromRound(learning, facts);
+  const { stats, delta } = roundCompleted({ ...before, learning }, event, { restDays });
+  delta.insight = facts ? insightFor(learning, facts) : null;
   saveStats(stats, id);
   setRaw(SESSION.delta(roundId), JSON.stringify(delta), "session");
   return delta;

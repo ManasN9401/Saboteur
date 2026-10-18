@@ -1,6 +1,6 @@
 # v0.6 · Learning loop: calibration, Misconception Profile, personalisation
 
-> Status: ☐ · Estimate: ~6 days · Track: product · Depends on: v0.3 (profiles and storage v2) · Spec: Phase 2, §5, §6.2
+> Status: ☑ (17 Oct; real-model targeting eval outstanding, see Progress) · Estimate: ~6 days · Track: product · Depends on: v0.3 (profiles and storage v2) · Spec: Phase 2, §5, §6.2
 
 ## Goal
 Turn the data we already collect (confidence bets, error types, misconception labels) into something the
@@ -62,3 +62,21 @@ Misconception Profile (spec §5), and feed it back so the next rounds target wha
 | V06-06 | Review queue (Leitner) plus "Review case" menu folder plus badge hooks | M |
 | V06-07 | Reveal insight line | S |
 | V06-08 | e2e: seeded profile → dossier numbers → drill → targeted round | M |
+
+## Progress
+
+**Shipped (17 Oct).** Exit path verified end to end on a seeded profile (`e2e/learning-loop.mjs`): dossier
+numbers → Drill this → targeted round → reveal insight → Review case from the menu.
+
+| Task | State | Notes |
+|---|---|---|
+| V06-01 aggregation | ☑ | `lib/learning/` (not `lib/profile/misconceptions.ts`): `schema.ts`, `model.ts` (pure `learnFromRound`), `views.ts`. Stored as `stats.learning`, so export/import carry it. Profiles from before v0.6 learn from their saved rounds the first time. Strength: miss +1, wrong fix +0.5, catch −0.5, confident miss +0.5 extra, half-life 10 days. Hand-computed 5-round fixture in `learning.test.ts` |
+| V06-02 normalisation | ☑ | Keys fold case, punctuation, filler words and plurals (`labels.ts`). After each round, unchecked labels go to `/api/learning/normalise` (grading model, low effort) and duplicates are merged (`mergeInto`). Offline, mock or on failure: passthrough |
+| V06-03 calibration tab | ☑ | Brass gauge (points over/underconfident), reliability chart, Brier per case, by subject, by kind of error; each with a sentence, charts with a table alternative |
+| V06-04 corkboard | ☑ | "Weak spots" tab: index cards on cork, string between cards sharing a subject (red) or kind of error (black), drawn behind the cards and dropped on one column. Card → history drawer → Drill this |
+| V06-05 targets | ◐ | `targets` in `GenerateRequest`; planter prompt; offline bias (library label/type first, rule fallback). `npm run eval:targeting`: offline 20/20 exact, 11/11 where the type was possible; mock LLM 20/20. **Not yet run against the real model** (no API key in this environment): run `npm run eval:targeting -- llm` |
+| V06-06 review queue | ☑ | Leitner boxes 1/3/7/16 days, then retired; a catch moves up a box only once due. "Review case" folder appears in the menu while anything is queued; targets the most overdue misconception plus one more on the same topic. Badge hook: **Reformed** (retire one), art from batch 11 |
+| V06-07 insight line | ☑ | Handwritten under the verdict headline, straight after a round: repeat miss → comeback catch → error type in this subject → error type overall → calibration |
+| V06-08 e2e | ☑ | `e2e/learning-loop.mjs` + `e2e/seed.mjs` (13 checks) |
+
+Open question resolved: label clustering is on (as recommended), cached per profile as `aliases`.

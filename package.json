@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eval:targeting": "node scripts/eval/run.mjs scripts/eval/targeting.ts",
+    "eval:autopsy": "node scripts/eval/run.mjs scripts/eval/autopsy.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.134.0",

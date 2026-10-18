@@ -12,3 +12,15 @@ export function onOpenSettings(fn: (tab: SettingsTab) => void) {
   window.addEventListener(SETTINGS, handler);
   return () => window.removeEventListener(SETTINGS, handler);
 }
+
+const CLOCK = "saboteur:clock";
+
+/** Open the clock card (the desk clock, or the running-timer chip on any page). */
+export function openClock() {
+  window.dispatchEvent(new CustomEvent(CLOCK));
+}
+
+export function onOpenClock(fn: () => void) {
+  window.addEventListener(CLOCK, fn);
+  return () => window.removeEventListener(CLOCK, fn);
+}

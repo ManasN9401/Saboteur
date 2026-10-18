@@ -19,6 +19,8 @@ export const KEYS = {
 /** sessionStorage: things that last for one tab's visit. */
 export const SESSION = {
   autostart: `${PREFIX}autostart`,
+  /** A round asked to target misconceptions ("Drill this", the review case), waiting for the setup page. */
+  drill: `${PREFIX}drill`,
   /** The guest profile created in this browser session (any other guest is stale and gets wiped). */
   guest: `${PREFIX}guest`,
   delta: (roundId: string) => `${PREFIX}delta:${roundId}`,

@@ -1,4 +1,6 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { emptyLearning } from "../learning/schema";
 import { emptyStats, StreakSchema, type Stats, type Streak } from "../profile/schema";
 import type { RoundRecord } from "../storage/schemas";
 import { BADGES, newBadges } from "./badges";
@@ -352,10 +354,20 @@ describe("roundCompleted", () => {
 describe("badges", () => {
   const ctx = (e: Partial<CompletionEvent> = {}, s: Partial<Stats> = {}) => ({ stats: { ...emptyStats(), ...s }, event: event(e), repaired: false });
 
-  it("has 20 badges, each with art and a description", () => {
-    expect(BADGES).toHaveLength(20);
-    expect(new Set(BADGES.map((b) => b.id)).size).toBe(20);
-    for (const b of BADGES) expect(b.description.length).toBeGreaterThan(5);
+  it("has 21 badges, each with art and a description", () => {
+    expect(BADGES).toHaveLength(21);
+    expect(new Set(BADGES.map((b) => b.id)).size).toBe(21);
+    for (const b of BADGES) {
+      expect(b.description.length).toBeGreaterThan(5);
+      expect(existsSync(`public/assets/badges/${b.id}.webp`)).toBe(true);
+    }
+  });
+
+  it("reformed needs a misconception retired from review", () => {
+    const learning = { ...emptyLearning(), reviews: { closed: 4, retired: 1 } };
+    expect(newBadges(ctx({}, { learning }))).toContain("reformed");
+    expect(newBadges(ctx({}, { learning: { ...learning, reviews: { closed: 4, retired: 0 } } }))).not.toContain("reformed");
+    expect(newBadges(ctx())).not.toContain("reformed");
   });
 
   it("red-handed needs every error caught", () => {
