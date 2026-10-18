@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Atkinson_Hyperlegible, Bricolage_Grotesque, IBM_Plex_Mono, Newsreader, Reenie_Beanie } from "next/font/google";
+import { ClockCard, TimerService } from "@/components/Clock";
 import { Nav } from "@/components/Nav";
 import { PrefsSync } from "@/components/PrefsSync";
 import { RedactionProvider } from "@/components/RedactionTransition";
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <div className="desk__photo" />
           <div className="desk__photo desk__photo--off" />
           <div className="desk__fx" />
+          <div className="desk__props" />
           <div className="desk__scrim" />
         </div>
         <PrefsSync />
@@ -50,6 +52,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           {children}
         </RedactionProvider>
         <SettingsDrawer />
+        <ClockCard />
+        <TimerService />
         <Toasts />
       </body>
     </html>

@@ -3,8 +3,8 @@
     python3 scripts/assets/folder_kit.py BATCH_DIR OUT_DIR
 
 Folder: the aged manila folder (keyed with cutout.py) is sliced so the tab can sit anywhere along
-the top edge: left corner | plain edge (repeats) | tab | plain edge | right corner, plus a bottom
-edge for the last folder in a stack. Coordinates are in the keyed image (1202 × 579).
+the top edge: left corner | plain edge (repeats) | tab | plain edge | right corner, and body tiles (side edges and plain fill) that repeat down the
+page for folders that run on under the ones in front. Coordinates are in the keyed image (1202 × 579).
 
 Textures: the generator's sparkle mark is filled, then each texture is divided by its own blurred
 average so only the fibres remain; cards keep their themed colour and get real paper grain on top.
@@ -22,7 +22,7 @@ from plates import fill, star_mask  # noqa: E402
 SCALE = 0.75  # export size relative to the source; displayed at about half that, so crisp at 2×
 TOP_H = 262  # tab plus enough body that the next folder in the stack covers the cut
 SLICES = {"left": (0, 140), "edge": (160, 340), "tab": (350, 850), "right": (1060, 1202)}
-FOOT = (500, 579)
+BODY = (TOP_H, 480)  # plain body below the band
 
 
 def keyed(path: str) -> Image.Image:
@@ -40,6 +40,14 @@ def mirrored(im: Image.Image) -> Image.Image:
     out = Image.new("RGBA", (im.width * 2, im.height))
     out.paste(im, (0, 0))
     out.paste(im.transpose(Image.FLIP_LEFT_RIGHT), (im.width, 0))
+    return out
+
+
+def mirrored_v(im: Image.Image) -> Image.Image:
+    """A tile above its upside-down copy: repeats down the page with no visible join."""
+    out = Image.new("RGBA", (im.width, im.height * 2))
+    out.paste(im, (0, 0))
+    out.paste(im.transpose(Image.FLIP_TOP_BOTTOM), (0, im.height))
     return out
 
 
@@ -70,10 +78,11 @@ def main():
     for name, (x0, x1) in SLICES.items():
         piece = top.crop((x0, 0, min(x1, folder.width), TOP_H))
         save(mirrored(piece) if name == "edge" else piece, f"{out}/folder-{name}")
-    foot = folder.crop((0, FOOT[0], folder.width, folder.height))
-    save(foot.crop((0, 0, 140, foot.height)), f"{out}/folder-foot-left")
-    save(mirrored(foot.crop((160, 0, 340, foot.height))), f"{out}/folder-foot-edge")
-    save(foot.crop((1060, 0, foot.width, foot.height)), f"{out}/folder-foot-right")
+    # The body below the band, for folders that run on under the ones in front (the menu's tray).
+    body = folder.crop((0, BODY[0], folder.width, BODY[1]))
+    save(mirrored_v(body.crop((0, 0, 140, body.height))), f"{out}/folder-body-left")
+    save(mirrored_v(mirrored(body.crop((160, 0, 340, body.height)))), f"{out}/folder-body-edge")
+    save(mirrored_v(body.crop((1060, 0, body.width, body.height))), f"{out}/folder-body-right")
 
     texture(f"{src}/tex-paper.jpg", f"{out}/grain-paper", strength=1.4)
     texture(f"{src}/tex-manila.jpg", f"{out}/grain-manila")

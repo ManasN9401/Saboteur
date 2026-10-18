@@ -2,12 +2,13 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { landFolderSheet } from "@/components/FolderOpen";
+import { CaseFolder, CoverNotes } from "@/components/CaseFolder";
 import { LoupeLoader, type LoaderStep } from "@/components/LoupeLoader";
 import { useRedactedNavigate } from "@/components/RedactionTransition";
 import { DIFFICULTIES, LEVELS } from "@/lib/config";
 import type { Difficulty, GenerateEvent, PipelineStep } from "@/lib/schemas";
 import { getDevicePrefs } from "@/lib/profile/profiles";
-import { store, type SetupSettings } from "@/lib/store";
+import { store, type Drill, type SetupSettings } from "@/lib/store";
 import { useIsClient, useTopics } from "@/lib/useStore";
 
 const DIFFICULTY_HELP: Record<Difficulty, string> = {
@@ -17,6 +18,9 @@ const DIFFICULTY_HELP: Record<Difficulty, string> = {
 };
 
 const EXAMPLES = ["Photosynthesis: light-dependent reactions", "The water cycle", "Causes of the First World War", "Differentiation: the chain rule", "Supply and demand"];
+
+/** Topic chips shown before "All topics": the built-in library is 30 strong, too many to list by default. */
+const CHIP_LIMIT = 8;
 
 const STEP_LABELS: Record<PipelineStep, string> = {
   write: "Writing the briefing",
@@ -59,6 +63,8 @@ function SetupForm({ initial }: { initial: SetupSettings | null }) {
   const abort = useRef<AbortController | null>(null);
   const form = useRef<HTMLFormElement>(null);
   const [engine, setEngine] = useState<{ engine: "llm" | "offline"; reason: string; topics: string[] } | null>(null);
+  // "Drill this" or a review case: the next round targets these misconceptions (V06-05).
+  const [drill, setDrill] = useState<Drill | null>(() => store.peekDrill());
 
   // Next keeps this page alive (hidden) after we leave it, and runs effect cleanups when it hides.
   // Reset the loader then, or coming back via "New topic" shows the finished loader forever.
@@ -133,7 +139,7 @@ function SetupForm({ initial }: { initial: SetupSettings | null }) {
       const res = await fetch("/api/saboteur/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: req.topic, level: req.level, difficulty: req.difficulty, notes: req.notes.trim() || undefined, engine: getDevicePrefs().engine }),
+        body: JSON.stringify({ topic: req.topic, level: req.level, difficulty: req.difficulty, notes: req.notes.trim() || undefined, engine: getDevicePrefs().engine, targets: drill?.targets }),
         signal: abort.current.signal,
       });
       if (!res.ok || !res.body) {
@@ -159,7 +165,8 @@ function SetupForm({ initial }: { initial: SetupSettings | null }) {
             throw new Error(event.message);
           } else if (event.type === "done") {
             setDone(new Set(order));
-            store.saveRound(event.round, req.notes.trim() || undefined);
+            store.saveRound(event.round, req.notes.trim() || undefined, drill ? { review: drill.review || undefined, targets: drill.targets.map((t) => t.key) } : undefined);
+            store.clearDrill();
             navigate(`/play/${event.round.id}`, `CASE FILE · ${event.round.topic.toUpperCase()}`);
             return;
           }
@@ -177,6 +184,7 @@ function SetupForm({ initial }: { initial: SetupSettings | null }) {
   const topics = useTopics();
   const library = offline ? engine.topics : EXAMPLES;
   const recentFirst = [...topics.favourites, ...topics.recent.filter((t) => !topics.favourites.some((f) => f.toLowerCase() === t.toLowerCase()))].slice(0, 8);
+  const [allTopics, setAllTopics] = useState(false);
   const quick = recentFirst.length ? { label: "Your topics", topics: recentFirst } : { label: "Example topics", topics: library };
   const suggestions = [...new Set([...recentFirst, ...(engine?.topics ?? []), ...EXAMPLES])];
   const isFavourite = topics.favourites.some((f) => f.toLowerCase() === topic.trim().toLowerCase());
@@ -188,19 +196,11 @@ function SetupForm({ initial }: { initial: SetupSettings | null }) {
   }));
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-5 pb-24 pt-6 sm:px-8">
-      <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="rise lg:sticky lg:top-10">
-          <p className="eyebrow mb-4">New round · Case file</p>
-          <h1 className="display text-[clamp(44px,7vw,88px)] text-desk">
-            What should we <em>sabotage</em> today?
-          </h1>
-          <p className="mt-5 max-w-[36ch] text-[19px] text-desk-soft">
-            We&apos;ll write a clear explanation, hide two to four believable mistakes in it, and have a fact-checker make sure everything else is right.
-          </p>
-        </div>
-
-        <form ref={form} onSubmit={start} className="paper rise px-6 py-7 sm:px-9 sm:py-9" style={{ animationDelay: "90ms" }} noValidate>
+    <main className="mx-auto w-full max-w-[1240px] px-2 pb-24 pt-2 sm:px-6">
+      <h1 className="sr-only">New case: what should we sabotage today?</h1>
+      {/* The folder that opened on the home page, lying open: notes on the cover, the form on the back panel. */}
+      <CaseFolder label="No. 01 · New case" cover={<CoverNotes />}>
+        <form ref={form} onSubmit={start} className="paper casefolder__sheet px-6 py-7 sm:px-9 sm:py-9" noValidate>
           <div className="paper-head label">
             <span>
               <b>Briefing request</b>
@@ -209,6 +209,29 @@ function SetupForm({ initial }: { initial: SetupSettings | null }) {
           </div>
 
           <div className="grid gap-7">
+            {drill && (
+              <div className="callout -mt-1 flex flex-wrap items-baseline justify-between gap-3 bg-[var(--pen-wash)] text-[15px] leading-snug" role="note">
+                <span>
+                  <strong>{drill.review ? "Review case." : "Drill."}</strong> This case tries to plant{" "}
+                  {drill.targets.map((t, i) => (
+                    <span key={t.key}>
+                      {i ? " or " : ""}“{t.label}”
+                    </span>
+                  ))}{" "}
+                  again, if the topic allows.
+                </span>
+                <button
+                  type="button"
+                  className="label cursor-pointer underline underline-offset-4 hover:text-ink"
+                  onClick={() => {
+                    store.clearDrill();
+                    setDrill(null);
+                  }}
+                >
+                  Plain case instead
+                </button>
+              </div>
+            )}
             {offline && (
               <div className="callout -mt-1 bg-[var(--paper-sunk)] text-[15px] leading-snug text-ink-soft" role="note">
                 <strong className="text-ink">Offline mode.</strong> {engine.reason} Rounds are built without AI: the text comes from your notes,
@@ -250,12 +273,17 @@ function SetupForm({ initial }: { initial: SetupSettings | null }) {
               </datalist>
             </div>
             <div className="-mt-4 flex flex-wrap gap-2" aria-label={quick.label}>
-              {quick.topics.map((ex) => (
+              {(allTopics ? quick.topics : quick.topics.slice(0, CHIP_LIMIT)).map((ex) => (
                 <button key={ex} type="button" className="chip" data-fav={topics.favourites.includes(ex) || undefined} onClick={() => setTopic(ex)}>
                   {topics.favourites.includes(ex) && <span aria-hidden="true">★ </span>}
                   {ex}
                 </button>
               ))}
+              {quick.topics.length > CHIP_LIMIT && (
+                <button type="button" className="label cursor-pointer self-center px-1 underline underline-offset-4 hover:text-ink" aria-expanded={allTopics} onClick={() => setAllTopics((v) => !v)}>
+                  {allTopics ? "Fewer" : `All ${quick.topics.length} topics`}
+                </button>
+              )}
             </div>
             {savedNotes && !notes.trim() && (
               <p className="-mt-3 flex flex-wrap items-center gap-3 text-[15px] text-ink-soft">
@@ -347,7 +375,7 @@ function SetupForm({ initial }: { initial: SetupSettings | null }) {
             </div>
           </div>
         </form>
-      </div>
+      </CaseFolder>
 
       {running && (
         <LoupeLoader

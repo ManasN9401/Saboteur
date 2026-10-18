@@ -1,23 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ERROR_TYPE_LABEL } from "@/lib/errorTypes";
 import type { Flag, GradedItem, PlantedError } from "@/lib/schemas";
 import { confidenceWord } from "./ConfidenceSlider";
 import { RevealDiff } from "./RevealDiff";
 import { StampVerdict } from "./StampVerdict";
 
 const GRADE_LABEL = { correct: "Correct fix", partially_correct: "Partly right", incorrect: "Wrong reason" } as const;
-const ERROR_TYPE_LABEL: Record<PlantedError["errorType"], string> = {
-  reversed_causation: "Reversed cause",
-  wrong_quantity_or_value: "Wrong value",
-  swapped_terms: "Swapped terms",
-  false_generalisation: "False generalisation",
-  missing_exception: "Missing exception",
-  wrong_mechanism: "Wrong mechanism",
-  wrong_sequence: "Wrong order",
-  wrong_attribution: "Wrong attribution",
-  plausible_but_false_detail: "Plausible but false",
-};
 
 /** Stamp once, when at least half the card is on screen. */
 function useOnScreen<T extends Element>() {

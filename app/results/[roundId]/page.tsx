@@ -15,6 +15,7 @@ import { useRoundRecord } from "@/lib/useStore";
 import type { Round, RoundResult, Submission } from "@/lib/schemas";
 import { reducedMotion } from "@/lib/prefs";
 import { ProgressStrip } from "@/components/ProgressStrip";
+import { takeDelta } from "@/lib/progress/record";
 import { toast } from "@/lib/toast";
 
 const PEEL_START = 450;
@@ -56,6 +57,8 @@ function Reveal({ record, result, submission }: { record: RoundRecord; result: R
   const [reduce] = useState(() => reducedMotion());
   const [peeled, setPeeled] = useState(reduce ? round.sentences.length + 4 : -1);
   const [shownScore, setShownScore] = useState(reduce ? result.score : 0);
+  // What the Misconception Profile makes of this case, written in the margin (only straight after playing it).
+  const [insight] = useState(() => takeDelta(round.id)?.insight ?? null);
 
   // Every sentence starts blacked out; the bars peel away one by one with the verdict underneath.
   useEffect(() => {
@@ -137,6 +140,14 @@ function Reveal({ record, result, submission }: { record: RoundRecord; result: R
           </p>
           <h1 className="display text-[clamp(40px,6vw,76px)] text-desk">{headline}</h1>
           <RoundSource round={round} />
+          {insight && (
+            <p className="reveal-insight" data-in={ready || undefined}>
+              {insight}{" "}
+              <Link href="/dossier#weak" className="reveal-insight__link">
+                Weak spots →
+              </Link>
+            </p>
+          )}
         </div>
         <div className="paper flex items-center gap-5 px-6 py-4" aria-live="polite">
           <div>

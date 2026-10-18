@@ -195,7 +195,7 @@ button { font: inherit; color: inherit; }
 .btn--small { font-size: 14px; padding: 9px 14px 8px; }
 
 .field { display: grid; gap: 8px; }
-.field > span { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
+.field > span, .field__label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
 .input {
   width: 100%; font-family: var(--font-read); font-size: 18px; color: var(--ink); background: var(--paper);
   border: 0; border-bottom: 1.5px solid var(--paper-edge); border-radius: 0; padding: 8px 2px 9px;
@@ -305,43 +305,135 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
 @keyframes fade-in { to { opacity: 1; } }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-/* The folder stack. Each folder overlaps the one above; tabs are staggered like a filing drawer. */
-.front__menu { width: 100%; }
-.front__menu ul { list-style: none; margin: 0; padding: 14px 0 0; }
-.front__menu li { opacity: 0; animation: deal-folder 0.42s calc(var(--i) * 55ms + 0.12s) cubic-bezier(.2,.8,.2,1) forwards; }
+/* The folder stack: full manila folders lying in an open wooden tray, each overlapping the one behind
+   it, tabs staggered like a filing drawer. Every folder's body runs on under the folders in front and
+   under the tray's front rail, so the pile is continuous: under each clipped corner is the folder
+   behind it, never the desk. */
+.front__menu {
+  --folder-h: 98px; --stride: 64px;
+  --tail: 58px; /* how much of the front folder shows below its band, before the front rail */
+  --tk: 0.8; /* the tray photo's scale (its 1× pixels to CSS px) */
+  --gap: 8px; --back: 4px;
+  width: 100%;
+}
+.front__menu ul { list-style: none; margin: 0; padding: 0 0 var(--tail); }
+.front__menu li {
+  position: relative; height: var(--folder-h); margin-top: calc(var(--stride) - var(--folder-h));
+  translate: var(--dx, 0) 0; rotate: var(--rot, 0deg);
+  opacity: 0; animation: deal-folder 0.42s calc(var(--i) * 55ms + 0.12s) cubic-bezier(.2,.8,.2,1) forwards;
+}
+.front__menu li:first-child { margin-top: 0; }
 @keyframes deal-folder { from { opacity: 0; transform: translateY(-14px) rotate(-1.2deg); } to { opacity: 1; transform: none; } }
+
+/* The tray: the photographed one (public/assets/tray/wood-*.webp, scripts/assets/batch11.py), straightened
+   and drawn as a 9-slice round the pile. Slices are in its 2× pixels; the corners take in the brass
+   brackets whole. The walls' inside edges (where the floor starts) are --wall-*. The front band is drawn
+   a second time above the pile (::after), from the front rim down, so the folders run under it. */
+.tray {
+  --wall-t: calc(76px * var(--tk)); --wall-l: calc(53px * var(--tk)); --wall-r: calc(53px * var(--tk)); --wall-b: calc(68px * var(--tk));
+  --slice: 140 180 210 180; --slice-w: calc(70px * var(--tk)) calc(90px * var(--tk)) calc(105px * var(--tk)) calc(90px * var(--tk));
+  position: relative; overflow: clip; overflow-clip-margin: 40px;
+  padding: calc(var(--wall-t) + var(--back)) calc(var(--wall-r) + var(--gap)) var(--wall-b) calc(var(--wall-l) + var(--gap));
+}
+/* The photo, on its own layer under the pile so its shadow can follow the wood (the photo has a clear
+   margin, which a box-shadow would outline). It's lit by the desk photo's own light (see "Trays in the
+   desk's light" below). */
+.tray__wood {
+  position: absolute; inset: 0; pointer-events: none;
+  border-image: var(--tray-wood) var(--slice) fill / var(--slice-w);
+  filter: var(--tray-contact) var(--tray-cast);
+}
+.tray::before, .tray::after { content: ""; position: absolute; pointer-events: none; }
+/* The walls are higher than the folders: they shade the pile along their inside edges. */
+.tray::before {
+  z-index: 2; inset: var(--wall-t) var(--wall-r) var(--wall-b) var(--wall-l);
+  box-shadow: var(--tray-walls);
+}
+.tray::after {
+  z-index: 3; inset: auto 0 0; height: calc(105px * var(--tk));
+  border-image: var(--tray-wood) var(--slice) / 0 calc(90px * var(--tk)) calc(105px * var(--tk));
+  -webkit-mask: linear-gradient(transparent calc(100% - var(--wall-b) - 1px), #000 calc(100% - var(--wall-b) + 1px));
+  mask: linear-gradient(transparent calc(100% - var(--wall-b) - 1px), #000 calc(100% - var(--wall-b) + 1px));
+}
+/* Trays in the desk's light. Each tray is relit by the day, dusk or night desk photo where it lies, as
+   the desk props are (scripts/assets/batch11.py); its shadow falls away from that light like the
+   calendar's: short and soft by day, long and hard from the low sun at dusk, away from the lamp at night.
+   The walls shade the inside on the side the light comes from. */
+:root {
+  --tray-wood: url("/assets/tray/wood-day.webp"); --tray-steel: url("/assets/tray/steel-day.webp");
+  --tray-contact: drop-shadow(0 1px 2px rgba(30, 18, 6, 0.45));
+  --tray-cast: drop-shadow(-12px 10px 10px rgba(40, 24, 8, 0.32));
+  --tray-walls: inset -7px 9px 10px -6px rgba(10, 5, 0, 0.5), inset 3px 0 6px -3px rgba(10, 5, 0, 0.35), inset 0 -6px 8px -5px rgba(10, 5, 0, 0.45);
+}
+:root:not([data-theme="dark"])[data-daypart="dusk"] {
+  --tray-wood: url("/assets/tray/wood-dusk.webp"); --tray-steel: url("/assets/tray/steel-dusk.webp");
+  --tray-cast: drop-shadow(-34px 26px 3px rgba(50, 22, 4, 0.42));
+}
+:root[data-theme="dark"] {
+  --tray-wood: url("/assets/tray/wood-night.webp"); --tray-steel: url("/assets/tray/steel-night.webp");
+  --tray-contact: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+  --tray-cast: drop-shadow(14px 9px 8px rgba(0, 0, 0, 0.5));
+  --tray-walls: inset 7px 9px 10px -6px rgba(10, 5, 0, 0.6), inset -3px 0 6px -3px rgba(10, 5, 0, 0.45), inset 0 -6px 8px -5px rgba(10, 5, 0, 0.55);
+}
+/* The brass plates are drawn (or photographed) in even light: dim them with the desk at night. */
+:root[data-theme="dark"] :is(.tray__plate, .autopsy-tray__plate) { filter: brightness(0.74) saturate(0.9); }
+/* The label holder on the front rail: a brass frame round a typed card. */
+.tray__plate {
+  position: absolute; z-index: 4; left: 50%; bottom: calc(19px * var(--tk)); translate: -50% 50%; margin: 0;
+  max-width: 76%; padding: 3px 16px; border-radius: 2px;
+  background: linear-gradient(180deg, #d4b672, #a8833e 55%, #7c5f28);
+  box-shadow: inset 0 1px 0 rgba(255, 245, 210, 0.7), inset 0 0 0 1px rgba(70, 45, 10, 0.55), 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+.tray__plate::before, .tray__plate::after {
+  content: ""; position: absolute; top: 50%; width: 4px; height: 4px; margin-top: -2px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f6e2a8, #7a5a22); box-shadow: 0 0 0 0.5px rgba(50, 30, 5, 0.6);
+}
+.tray__plate::before { left: 6px; }
+.tray__plate::after { right: 6px; }
+.tray__plate span {
+  display: block; min-width: 180px; min-height: 1.45em; padding: 2px 10px 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
+  background: #efe4c8; box-shadow: inset 0 1px 2px rgba(60, 40, 10, 0.45);
+  font-family: var(--font-mono); font-size: 10.5px; line-height: 1.45; letter-spacing: 0.16em; text-transform: uppercase; color: #3b2c18;
+}
+
 /* Real folder art (components/FolderArt.tsx). Pieces are exported at 2× and drawn at half size.
    Each band paints the repeating plain edge as its background (clipped between the corners), then
-   the corners and tab on a layer above it. */
+   the corners and tab on a layer above it. The body below repeats down the page the same way. */
 .folder-art {
   --corner-l: calc(var(--folder-h) * 105 / 196); --corner-r: calc(var(--folder-h) * 106 / 196); --tab-w: calc(var(--folder-h) * 375 / 196);
   /* Tab's left edge: between the corners, tab-at of the way along. --tab-x is for `left` (100% = band
      width); --tab-bg is the same point for background-position, where 100% = band width − tab width. */
   --tab-x: calc(var(--corner-l) + (100% - var(--corner-l) - var(--corner-r) - var(--tab-w)) * var(--tab-at));
   --tab-bg: calc(var(--corner-l) * (1 - var(--tab-at)) - var(--corner-r) * var(--tab-at) + 100% * var(--tab-at));
-  position: absolute; inset: 0 0 auto; display: block;
-  filter: drop-shadow(0 -1px 1.5px rgba(40, 25, 5, 0.22)) drop-shadow(0 8px 10px rgba(var(--shadow), 0.18));
+  /* Folders deeper in the pile are a touch darker; each casts a soft contact shadow on the one behind. */
+  --tone: calc(1 - (var(--n, 1) - 1 - var(--i, 0)) * 0.014);
+  --stack-shadow: drop-shadow(0 -1px 1.2px rgba(40, 25, 5, 0.32)) drop-shadow(0 -3px 6px rgba(30, 18, 6, 0.24));
+  position: absolute; inset: 0 0 auto; display: block; pointer-events: none;
+  filter: brightness(var(--tone)) var(--stack-shadow);
 }
-.folder-art__top, .folder-art__foot { position: relative; display: block; box-sizing: border-box; background-clip: content-box; background-repeat: repeat-x; background-size: auto 100%; }
-.folder-art__top { height: var(--folder-h); padding: 0 calc(var(--corner-r) - 2px) 0 calc(var(--corner-l) - 2px); background-image: url("/assets/folder/folder-edge.webp"); }
-.folder-art__foot { height: calc(var(--folder-h) * 59 / 196); margin-top: -1px; padding: 0 calc(var(--corner-r) - 2px) 0 calc(var(--corner-l) - 2px); background-image: url("/assets/folder/folder-foot-edge.webp"); }
-.folder-art__top::before, .folder-art__foot::before { content: ""; position: absolute; inset: 0; background-repeat: no-repeat; background-size: auto 100%; }
+.folder-art__top, .folder-art__body { position: relative; display: block; box-sizing: border-box; background-clip: content-box; padding: 0 calc(var(--corner-r) - 2px) 0 calc(var(--corner-l) - 2px); }
+.folder-art__top { height: var(--folder-h); background-repeat: repeat-x; background-size: auto 100%; background-image: url("/assets/folder/folder-edge.webp"); }
+/* The body runs on under every folder in front and just under the tray's front rim. */
+.folder-art__body {
+  --tile-h: calc(var(--folder-h) * 327 / 196);
+  height: calc((var(--n, 1) - 1 - var(--i, 0)) * var(--stride) + var(--tail) + 12px); margin-top: -1px;
+  background-image: url("/assets/folder/folder-body-edge.webp"); background-repeat: repeat; background-size: auto var(--tile-h);
+}
+.folder-art__top::before, .folder-art__body::before { content: ""; position: absolute; inset: 0; background-repeat: no-repeat; background-size: auto 100%; }
 .folder-art__top::before {
   background-image: url("/assets/folder/folder-left.webp"), url("/assets/folder/folder-tab.webp"), url("/assets/folder/folder-right.webp");
   background-position: left top, var(--tab-bg) top, right top;
 }
-.folder-art__foot::before { background-image: url("/assets/folder/folder-foot-left.webp"), url("/assets/folder/folder-foot-right.webp"); background-position: left top, right top; }
+.folder-art__body::before {
+  background-image: url("/assets/folder/folder-body-left.webp"), url("/assets/folder/folder-body-right.webp");
+  background-repeat: repeat-y; background-size: auto var(--tile-h); background-position: left top, right top;
+}
 /* The tab's label window: typed number. */
 .folder-art__top b {
   position: absolute; z-index: 1; left: calc(var(--tab-x) + var(--tab-w) * 0.17); width: calc(var(--tab-w) * 0.66); top: 4%; height: 29%; display: grid; place-items: center;
   font-family: var(--font-mono); font-weight: 500; font-size: 10.5px; letter-spacing: 0.16em; color: rgba(58, 40, 14, 0.72);
 }
 
-/* The menu stack: each folder overlaps the one behind it; only a band of each body shows. */
-.front__menu { --folder-h: 98px; --stride: 64px; }
-.front__menu ul { padding: 0 0 calc(var(--folder-h) * 59 / 196); }
-.front__menu li { position: relative; height: var(--folder-h); margin-top: calc(var(--stride) - var(--folder-h)); }
-.front__menu li:first-child { margin-top: 0; }
 .folder {
   position: relative; display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
   color: #3a2810; transition: transform 0.28s cubic-bezier(.2,.8,.2,1), filter 0.28s ease;
@@ -352,18 +444,20 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
 }
 .folder__lock { position: absolute; right: 22px; top: calc(var(--folder-h) * 0.36 + 6px); z-index: 1; width: 14px; height: 14px; opacity: 0.55; }
 .folder[aria-disabled="true"] { cursor: default; }
-.folder[aria-disabled="true"] .folder-art { filter: saturate(0.55) brightness(0.93) drop-shadow(0 -1px 1.5px rgba(40, 25, 5, 0.22)) drop-shadow(0 8px 10px rgba(var(--shadow), 0.18)); }
+.folder[aria-disabled="true"] .folder-art { filter: saturate(0.55) brightness(calc(var(--tone) * 0.93)) var(--stack-shadow); }
 .folder[aria-disabled="true"] .folder__label { color: rgba(58, 40, 16, 0.5); }
-.folder[data-focus="true"] { transform: translateX(20px) rotate(-0.5deg); }
-.folder[data-focus="true"] .folder-art { filter: brightness(1.05) drop-shadow(0 -1px 1.5px rgba(40, 25, 5, 0.25)) drop-shadow(10px 14px 16px rgba(var(--shadow), 0.3)); }
+/* The chosen folder is drawn up out of the pile: more of it shows, and it lifts off the one behind. */
+.folder[data-focus="true"] { transform: translateY(-12px); }
+.folder[data-focus="true"] .folder-art { filter: brightness(calc(var(--tone) * 1.04)) drop-shadow(0 -1px 1.5px rgba(40, 25, 5, 0.35)) drop-shadow(0 -5px 10px rgba(30, 18, 6, 0.32)); }
 .folder[data-focus="true"] .folder__label::before { content: ""; position: absolute; left: -12px; top: 50%; width: 5px; height: 5px; border-radius: 50%; background: var(--pen); transform: translateY(-50%); }
 /* The pulled-out folder and its red dot are the focus mark, so mouse and keyboard always agree. */
 .folder:focus-visible { outline: none; }
 .front__begin:focus-visible { outline: none; color: var(--on-desk); }
 @media (max-width: 640px) {
-  .front__menu { --folder-h: 88px; --stride: 58px; }
+  .front__menu { --folder-h: 88px; --stride: 58px; --tail: 44px; --tk: 0.6; --gap: 4px; --back: 2px; }
   .folder__label { font-size: 20px; }
-  .folder[data-focus="true"] { transform: translateX(8px) rotate(-0.5deg); }
+  .tray__plate { max-width: 90%; padding: 2px 13px; }
+  .tray__plate span { min-width: 0; padding: 1px 6px 0; font-size: 9px; letter-spacing: 0.1em; }
 }
 
 /* Easter egg: steam off the mug in the desk photo (components/DeskSteam.tsx). */
@@ -388,34 +482,109 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
 @keyframes lamp-flicker { 0% { opacity: 1; } 10% { opacity: 0.3; } 16% { opacity: 0.95; } 28% { opacity: 0.15; } 34% { opacity: 0.6; } 100% { opacity: 0; } }
 /* No lamp, no lamplight: the warm glow and the dust in its beam go with it. */
 :root[data-lamp="off"] .front__glow, :root[data-lamp="off"] .front canvas { opacity: 0 !important; transition: opacity 0.2s ease; }
-/* Things on the desk are lit by the lamp too: they dim with it (the menu stays usable). */
-.front__stage, .desk-cal { transition: filter 0.35s ease; }
+/* The menu is lit by the lamp too: it dims with it (and stays usable). */
+.front__stage { transition: filter 0.35s ease; }
 :root[data-lamp="off"] .front__stage { filter: brightness(0.62) saturate(0.85); transition-duration: 0.18s; }
-:root[data-lamp="off"] .desk-cal { filter: brightness(0.5) saturate(0.8) drop-shadow(6px 10px 8px rgba(0, 0, 0, 0.32)); transition-duration: 0.18s; }
 
-/* The flip calendar on the desk (components/DeskCalendar.tsx). Wide screens only: the desk is too narrow on phones. */
+/* ---------- The calendar and the pen on the desk (DeskCalendar.tsx, DeskPen.tsx, lib/deskProps.ts) ----------
+   They're composited into each desk photo's own light (scripts/assets/desk_props.py) and drawn in
+   .desk__props, between the photo and the scrim, so they're dimmed and hazed exactly like the desk.
+   Each comes in four versions, one per photo; the lamp-off version crossfades like the photo does.
+   Shadows are multiply layers. What's written on the calendar is multiplied onto its lit paper, so the
+   ink takes the same light. Clicks go to invisible copies above the scrim (.desk-cal-hit, .desk-pen-hit). */
+.desk__props { position: absolute; inset: 0; }
+:root[data-desk="plain"] :is(.desk__props, .desk-cal-hit, .desk-pen-hit, .desk-clock-hit) { display: none; }
+.desk-prop-v { display: none; }
+:root:not([data-theme="dark"]):not([data-daypart="dusk"]) .desk-prop-v[data-v="day"],
+:root:not([data-theme="dark"])[data-daypart="dusk"] .desk-prop-v[data-v="dusk"],
+:root[data-theme="dark"] .desk-prop-v:is([data-v="night"], [data-v="night-off"]) { display: block; }
+:root[data-theme="dark"] .desk-prop-v[data-v="night-off"] { opacity: 0; transition: opacity 0.35s ease; }
+:root[data-theme="dark"][data-lamp="off"] .desk-prop-v[data-v="night-off"] { opacity: 1; transition-duration: 0.18s; }
+:root[data-theme="dark"][data-lamp="flicker"] .desk-prop-v[data-v="night-off"] { animation: lamp-flicker 1.1s ease-out forwards; }
+/* Two shadows multiplied would double up: the lamp's shadow goes as the lamp-off one comes. */
+:root[data-theme="dark"] .desk-prop-shadow[data-v="night"] { transition: opacity 0.35s ease; }
+:root[data-theme="dark"][data-lamp="off"] .desk-prop-shadow[data-v="night"] { opacity: 0; transition-duration: 0.18s; }
+:root[data-theme="dark"][data-lamp="flicker"] .desk-prop-shadow[data-v="night"] { animation: lamp-flicker-in 1.1s ease-out forwards; }
+@keyframes lamp-flicker-in { 0% { opacity: 0; } 10% { opacity: 0.7; } 16% { opacity: 0.05; } 28% { opacity: 0.85; } 34% { opacity: 0.4; } 100% { opacity: 1; } }
+.desk-prop-shadow { position: absolute; max-width: none; mix-blend-mode: multiply; pointer-events: none; }
+
 .desk-cal {
-  position: fixed; z-index: 1; margin: 0; right: 4.5vw; top: 40vh; width: clamp(200px, 17vw, 270px); aspect-ratio: 760 / 629;
-  background: url("/assets/props/calendar.webp") center / 100% 100% no-repeat; rotate: 4deg; container-type: inline-size;
-  filter: drop-shadow(6px 10px 8px rgba(0, 0, 0, 0.32));
-  opacity: 0; animation: deal-folder 0.5s 0.45s cubic-bezier(.2,.8,.2,1) forwards;
+  --page: url("/assets/desk-props/page-day.webp");
+  position: absolute; container-type: inline-size; pointer-events: none;
 }
-.front[data-stage="title"] .desk-cal { display: none; }
-@media (max-width: 1099px) { .desk-cal { display: none; } }
-.desk-cal__title { position: absolute; display: flex; align-items: flex-end; padding-left: 4%; font-family: var(--font-hand); font-size: 7.5cqw; line-height: 0.9; color: #2b3a66; }
-.desk-cal__day { position: absolute; }
+:root[data-daypart="dusk"] .desk-cal { --page: url("/assets/desk-props/page-dusk.webp"); }
+:root[data-theme="dark"] .desk-cal { --page: url("/assets/desk-props/page-night.webp"); }
+:root[data-theme="dark"][data-lamp="off"] .desk-cal { --page: url("/assets/desk-props/page-night-off.webp"); }
+/* The block (its top, its page-edge side) is inside the pad so the ink is multiplied onto it. */
+.desk-cal__pad { position: absolute; inset: 0; perspective: 1100px; }
+.desk-cal__block { position: absolute; max-width: none; }
+.desk-cal__page { position: absolute; inset: 0; transform-origin: 50% 6%; }
+/* Turning pages: the old page lifts up and over the rings; going back, the earlier page drops down. The
+   rings stay put (the moving page is clipped below them). Only a moving page needs its own paper. */
+.desk-cal__page:is([data-role="leaving"], [data-arriving]) { background: var(--page) center / 100% 100% no-repeat; clip-path: inset(7% 0 0 0); }
+.desk-cal__page[data-role="leaving"] { animation: cal-lift 0.6s cubic-bezier(.4,0,.6,1) forwards; }
+.desk-cal__page[data-arriving] { animation: cal-drop 0.6s cubic-bezier(.3,.1,.3,1) both; }
+@keyframes cal-lift { 0% { transform: rotateX(0); filter: brightness(1); } 45% { filter: brightness(1.1); } 100% { transform: rotateX(-115deg); opacity: 0; filter: brightness(0.7); } }
+@keyframes cal-drop { 0% { transform: rotateX(-115deg); opacity: 0; filter: brightness(0.7); } 50% { opacity: 1; filter: brightness(1.1); } 100% { transform: rotateX(0); filter: brightness(1); } }
+.desk-cal :is(.desk-cal__title, .desk-cal__streak, .desk-cal__day i) { mix-blend-mode: multiply; }
+.desk-cal__title { position: absolute; display: flex; align-items: flex-end; justify-content: space-between; gap: 2%; font-family: var(--font-hand); font-size: 7.5cqw; line-height: 0.9; color: #2b3a66; }
+.desk-cal__title > span { flex: 1; padding-left: 2%; white-space: nowrap; }
+.desk-cal__turn { border: 0; background: none; padding: 0 1.5cqw; font-family: var(--font-hand); font-size: 9cqw; line-height: 0.7; color: #2b3a66; opacity: 0.45; transition: opacity 0.2s; }
+.desk-cal__turn[data-disabled] { opacity: 0.12; }
+:root:has(.desk-cal-hit .desk-cal__turn:first-child:is(:hover, :focus-visible):not(:disabled)) .desk-cal .desk-cal__turn:first-child,
+:root:has(.desk-cal-hit .desk-cal__turn:last-child:is(:hover, :focus-visible):not(:disabled)) .desk-cal .desk-cal__turn:last-child { opacity: 1; }
+.desk-cal__streak { position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 1cqw; transform: rotate(-2deg); color: var(--pen); }
+.desk-cal__streak b { font-family: var(--font-hand); font-weight: 400; font-size: 8cqw; line-height: 0.9; }
+.desk-cal__streak small { font-family: var(--font-mono); font-size: 2.6cqw; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(40, 36, 30, 0.6); }
+.desk-cal__day { position: absolute; display: block; padding: 0; border: 0; border-radius: 3px; background: transparent; transition: background 0.15s; }
+.desk-cal .desk-cal__day[data-hover] { background: color-mix(in srgb, var(--pen) 14%, white); mix-blend-mode: multiply; }
 .desk-cal__day i { position: absolute; left: 7%; top: 4%; font-style: normal; font-family: var(--font-mono); font-size: 3.2cqw; color: rgba(40, 36, 30, 0.55); }
 .desk-cal__mark, .desk-cal__ring { position: absolute; inset: 6% 4% 2%; width: 92%; height: 92%; overflow: visible; fill: none; stroke: var(--pen); stroke-linecap: round; mix-blend-mode: multiply; }
 .desk-cal__mark path { stroke-width: 2.6; }
+.desk-cal__mark--2 { transform: rotate(16deg) scale(0.78); opacity: 0.75; }
 .desk-cal__ring { inset: -10% -14%; width: 128%; height: 120%; }
 .desk-cal__ring path { stroke-width: 1.8; }
 .desk-cal__frost { position: absolute; inset: 14% 22%; width: 56%; height: 72%; fill: none; stroke: #2f6fa3; stroke-width: 2.2; opacity: 0.75; mix-blend-mode: multiply; }
 .desk-cal__daily { position: absolute; right: 8%; top: 8%; width: 14%; aspect-ratio: 1; border-radius: 50%; background: var(--pen); opacity: 0.8; mix-blend-mode: multiply; }
 
+/* The click layer: the same page laid out again, invisible, above the scrim. */
+.desk-cal-hit { position: fixed; z-index: 1; container-type: inline-size; }
+.desk-cal-hit .desk-cal__page :is(.desk-cal__title, .desk-cal__turn) { color: transparent; }
+.desk-cal-hit .desk-cal__turn { opacity: 1; color: transparent; cursor: pointer; }
+.desk-cal-hit .desk-cal__turn:disabled { cursor: default; }
+.desk-cal-hit .desk-cal__day { cursor: pointer; }
+.desk-cal-hit :is(.desk-cal__day, .desk-cal__turn):focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.front:not([data-stage="menu"]) :is(.desk-cal-hit, .desk-pen-hit, .desk-clock-hit) { display: none; }
 
-.front__hint {
-  min-height: 1.5em; margin: 22px 0 0 4px; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--on-desk-soft);
+.desk-pen { position: absolute; pointer-events: none; }
+.desk-pen__body { position: absolute; isolation: isolate; transition: translate 0.25s cubic-bezier(.2,.8,.2,1); }
+.desk-pen__img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; }
+/* The pen in your ink: only the version in the profile's pen colour shows. */
+.desk-pen__img:not([data-colour="red"]), :root[data-pen]:not([data-pen="red"]) .desk-pen__img[data-colour="red"] { visibility: hidden; }
+:root[data-pen="blue"] .desk-pen__img[data-colour="blue"], :root[data-pen="green"] .desk-pen__img[data-colour="green"], :root[data-pen="violet"] .desk-pen__img[data-colour="violet"] { visibility: visible; }
+/* Picked up a fraction on hover: it lifts off its shadow. */
+:root:has(.desk-pen-hit:is(:hover, :focus-visible)) .desk-pen__body { translate: 0 -1.5px; }
+.desk-pen-hit { position: fixed; z-index: 1; padding: 0; border: 0; border-radius: 999px; background: none; cursor: pointer; }
+.desk-pen-hit::before { content: ""; position: absolute; inset: -10px -4px; }
+.desk-pen-hit:focus-visible { outline: 2px solid var(--focus); outline-offset: 5px; }
+
+/* The note for a day: a slip tucked under the calendar, on the empty desk below it (clear of the menu). */
+.desk-cal__note {
+  position: absolute; z-index: 3; right: 6%; top: calc(100% + 14px); width: 250px; padding: 14px 16px 14px; rotate: -3deg; color: var(--ink);
+  font-size: 14.5px; line-height: 1.35; animation: deal-folder 0.25s cubic-bezier(.2,.8,.2,1);
 }
+:root[data-theme="dark"] .desk-cal__note { filter: brightness(0.8) sepia(0.28); }
+.desk-cal__note-date { margin: 0 24px 6px 0; font-size: 26px; line-height: 1; color: var(--pen); }
+.desk-cal__note-close { position: absolute; top: 6px; right: 8px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: none; color: var(--ink-soft); font-size: 19px; line-height: 1; cursor: pointer; }
+.desk-cal__note-close:hover { background: var(--paper-sunk); }
+.desk-cal__note ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.desk-cal__note li button { display: grid; width: 100%; padding: 6px 8px; border: 0; border-radius: 3px; background: none; text-align: left; color: var(--ink); cursor: pointer; }
+.desk-cal__note li button:hover, .desk-cal__note li button:focus-visible { background: var(--paper-sunk); }
+.desk-cal__note li b { font-family: var(--font-display); font-weight: 650; font-size: 15px; }
+.desk-cal__note li span { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+.desk-cal__note-line { margin: 4px 0 0; color: var(--ink-soft); }
+
+
 
 .front__lamp {
   position: fixed; left: 18px; bottom: 14px; margin: 0; display: flex; align-items: center; gap: 8px;
@@ -435,9 +604,186 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
 :root[data-motion="reduced"] .front__menu li { animation: none; opacity: 1; }
 :root[data-motion="reduced"] :is(.front__mark, .folder) { transition: none; }
 
+/* ---------- The desk clock and its timers (DeskClock.tsx, Clock.tsx, lib/timer.ts) ---------- */
+/* The photo's painted hands are patched out; live hands are drawn on the dial in perspective,
+   multiplied into its light like the ink on the calendar. */
+.desk-clock { position: absolute; inset: 0; pointer-events: none; transform-origin: var(--clock-x) var(--clock-y); }
+.desk-clock-face, .desk-clock-body { position: absolute; max-width: none; pointer-events: none; }
+/* When the alarm rings the clock shudders in three bursts, with the bell. Only then is the cut-out of the
+   whole clock shown (it moves; the photo under it doesn't, and its soft edge is plain desk). */
+.desk-clock-body { visibility: hidden; }
+:root[data-ringing] .desk-clock-body { visibility: visible; }
+:root[data-ringing] .desk-clock { animation: clock-ring 0.9s 3; }
+:root[data-ringing] :is(.clock-view__photo, .clock-view__hands) { animation: clock-ring-big 0.9s 3; }
+:root[data-motion="reduced"][data-ringing] :is(.desk-clock, .clock-view__photo, .clock-view__hands) { animation: none; }
+@keyframes clock-ring {
+  0%, 8%, 16%, 24%, 32%, 40%, 48% { transform: translate(1.4px, -0.6px) rotate(0.5deg); }
+  4%, 12%, 20%, 28%, 36%, 44%, 52% { transform: translate(-1.4px, 0.6px) rotate(-0.5deg); }
+  58%, 100% { transform: none; }
+}
+@keyframes clock-ring-big {
+  0%, 8%, 16%, 24%, 32%, 40%, 48% { transform: translate(3px, -1px) rotate(0.7deg); }
+  4%, 12%, 20%, 28%, 36%, 44%, 52% { transform: translate(-3px, 1px) rotate(-0.7deg); }
+  58%, 100% { transform: none; }
+}
+.desk-clock-hands { --hand-light: 0.9; position: absolute; overflow: visible; pointer-events: none; }
+/* The hands are photographs lit for the close-up: dim them to each desk photo's light at the clock. */
+.desk-clock-hands > g:last-of-type image { filter: brightness(var(--hand-light)); }
+:root[data-daypart="dusk"] .desk-clock-hands { --hand-light: 0.82; }
+:root[data-theme="dark"] .desk-clock-hands { --hand-light: 0.5; transition: --hand-light 0.35s; }
+:root[data-theme="dark"][data-lamp="off"] .desk-clock-hands { --hand-light: 0.26; }
+.desk-clock-hit { position: fixed; z-index: 1; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.desk-clock-hit:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* The clock view (Clock.tsx): a close-up of the clock filling the screen, controls beside it. On the
+   home desk the camera first pushes in on the clock in the photo, then cuts to the close-up. */
+.desk { transition: transform 0.55s cubic-bezier(.55,0,.25,1); }
+.front { transition: transform 0.55s cubic-bezier(.55,0,.25,1), opacity 0.25s ease; }
+/* The camera move (night desk): the menu, the props and the scrim clear away, leaving the bare photo the
+   footage starts from; they come back as it ends on the way out. */
+.desk__props { transition: opacity 0.25s ease; }
+:root[data-clock="pan"] :is(.front, .desk__props) { opacity: 0; pointer-events: none; }
+:root[data-clock="pan"][data-scene] .desk__scrim { opacity: 0; transition: opacity 0.25s ease; }
+.clock-view[data-pan] { background: none; animation: none; }
+.clock-view__pan { position: absolute; max-width: none; height: auto; }
+/* Landing: the footage ends on the close-up; the scene starts exactly where it left it and settles into
+   place, the hands appear, the controls fade in. Leaving reverses it before the footage plays back. */
+.clock-view[data-landing][data-stage] { animation: none; }
+.clock-view[data-landing][data-stage="in"] .clock-view__scene { transform-origin: 0 0; animation: clock-land 0.6s cubic-bezier(.3,.6,.2,1) both; }
+.clock-view[data-landing][data-stage="in"] .clock-view__hands { animation: clock-fade-in 0.4s 0.45s ease both; }
+.clock-view[data-stage="settle-out"] .clock-view__scene { transform-origin: 0 0; animation: clock-unland 0.4s cubic-bezier(.5,0,.6,1) both; }
+.clock-view[data-stage="settle-out"] :is(.clock-view__hands, .clock-card) { opacity: 0; transition: opacity 0.15s ease; pointer-events: none; }
+.clock-view[data-stage="settle-out"]::after { opacity: 0; transition: opacity 0.2s ease; }
+@keyframes clock-land { from { transform: var(--from); } }
+@keyframes clock-unland { to { transform: var(--from); } }
+@keyframes clock-fade-in { from { opacity: 0; } }
+:root[data-clock="zoom"] :is(.desk, .front) { transform: scale(2.6); }
+:root:has(.desk-clock-hit) :is(.desk, .front) { transform-origin: var(--clock-x) var(--clock-y); }
+.clock-view { position: fixed; inset: 0; z-index: 60; overflow: hidden; background: radial-gradient(120% 90% at 30% 40%, #3a2717, #140d07 70%); }
+.clock-view[data-stage="in"] { animation: clock-view-in 0.6s ease both; }
+.clock-view[data-stage="out"] { animation: clock-view-out 0.45s ease both; pointer-events: none; }
+@keyframes clock-view-in { 0%, 30% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes clock-view-out { to { opacity: 0; } }
+.clock-view__scene { position: absolute; inset: 0; transform-origin: var(--hub-x) var(--hub-y); }
+.clock-view[data-stage="in"] .clock-view__scene { animation: clock-scene-in 0.6s cubic-bezier(.2,.7,.2,1) both; }
+.clock-view[data-stage="out"] .clock-view__scene { animation: clock-scene-out 0.4s ease-in both; }
+@keyframes clock-scene-in { 0%, 30% { transform: scale(0.8); } 100% { transform: none; } }
+@keyframes clock-scene-out { to { transform: scale(0.85); } }
+.clock-view__photo { position: absolute; max-width: none; height: auto; user-select: none; }
+:root[data-theme="dark"] .clock-view__photo { filter: brightness(0.82) saturate(0.95); }
+:root:not([data-theme="dark"]) .clock-view__photo { filter: brightness(1.06) saturate(0.92); }
+:root[data-lamp="off"] .clock-view__photo { filter: brightness(0.45) saturate(0.8); }
+/* The photographed hands (lib/clockHands.ts), turned about their pivots on the hub; one shadow for all,
+   cast away from the lamp. */
+.clock-view__hands { position: absolute; width: 0; height: 0; filter: drop-shadow(4px 7px 4px rgba(25, 12, 2, 0.5)); }
+.clock-view__hands img { position: absolute; max-width: none; user-select: none; filter: sepia(0.18) saturate(0.85); }
+/* The second hand ticks, with the little recoil of a real escapement. */
+.clock-view__second { transition: transform 0.22s cubic-bezier(.3,1.9,.5,1); }
+:root[data-motion="reduced"] .clock-view__second { transition: none; }
+:root[data-motion="reduced"] :is(.desk, .front) { transition: none; }
+:root[data-motion="reduced"] .clock-view, :root[data-motion="reduced"] .clock-view__scene { animation: none !important; }
+
+/* The controls: no card, just set on the blurred desk beside the clock, in the menu's type and colours,
+   lit warm. A soft shade behind them keeps them readable over the bokeh (or over the clock's base, below
+   it on narrow screens). Start/Pause is brass, like the tray's label plate; the rest are quiet. */
+.clock-view[data-layout="wide"]::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; animation: clock-fade-in 0.5s 0.2s ease both;
+  background: linear-gradient(90deg, transparent 48%, rgba(14, 8, 3, 0.5) 72%, rgba(10, 6, 2, 0.62));
+}
+.clock-card {
+  --cc-ink: #f1e6d0; --cc-soft: rgba(241, 230, 208, 0.62); --cc-faint: rgba(241, 230, 208, 0.18); --cc-brass: #c9a35c;
+  position: absolute; z-index: 1; width: 360px; max-height: calc(100dvh - 48px); overflow: auto; padding: 8px 4px 8px 8px;
+  color: var(--cc-ink); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  scrollbar-color: var(--cc-faint) transparent;
+}
+.clock-view[data-layout="wide"] .clock-card { right: 6vw; top: 50%; translate: 0 -50%; }
+.clock-view[data-layout="stacked"] .clock-card {
+  left: 0; right: 0; bottom: 0; width: auto; max-height: 58dvh; padding: 40px 20px 18px;
+  background: linear-gradient(rgba(12, 7, 3, 0) 0, rgba(12, 7, 3, 0.86) 40px, rgba(10, 6, 2, 0.94));
+}
+.clock-view[data-stage="in"] .clock-card { animation: clock-card-in 0.6s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes clock-card-in { 0%, 40% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: none; } }
+.clock-card:focus { outline: none; }
+.clock-card :focus-visible { outline: 2px solid var(--cc-brass); outline-offset: 3px; }
+.clock-card__close { position: absolute; top: 2px; right: 0; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; color: var(--cc-soft); font-size: 22px; line-height: 1; cursor: pointer; }
+.clock-view[data-layout="stacked"] .clock-card__close { top: 32px; right: 12px; }
+.clock-card__close:hover { color: var(--cc-ink); background: var(--cc-faint); }
+.clock-card__now { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 12px; margin: 0 36px 18px 0; }
+.clock-card__now time { font-family: var(--font-display); font-weight: 720; font-size: 30px; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.clock-card__now time small { margin-left: 4px; font-family: var(--font-mono); font-weight: 400; font-size: 12px; color: var(--cc-soft); }
+.clock-card__now > span { grid-column: 1 / -1; margin-top: 4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cc-soft); }
+.clock-card__fmt { grid-row: 1; grid-column: 2; justify-self: start; padding: 1px 7px; border: 1px solid var(--cc-faint); border-radius: 99px; background: none; font-family: var(--font-mono); font-size: 10px; color: var(--cc-soft); cursor: pointer; }
+.clock-card__fmt:hover { color: var(--cc-ink); border-color: var(--cc-soft); }
+/* Modes: typed labels; the chosen one underlined in pen. */
+.clock-card__tabs { display: flex; gap: 22px; padding-bottom: 2px; border-bottom: 1px solid var(--cc-faint); }
+.clock-card__tab { position: relative; padding: 4px 0 8px; border: 0; background: none; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cc-soft); cursor: pointer; }
+.clock-card__tab:hover { color: var(--cc-ink); }
+.clock-card__tab[aria-selected="true"] { color: var(--cc-ink); }
+.clock-card__tab[aria-selected="true"]::after { content: ""; position: absolute; left: -3px; right: -5px; bottom: -3px; height: 3px; border-radius: 3px; background: var(--pen); transform: rotate(-1.2deg); }
+.clock-card__panel { padding: 18px 0 0; }
+.clock-card__phase { margin: 0 0 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #ef8a7d; }
+.clock-card__phase:not([data-phase="focus"]) { color: #9fd2b4; }
+.clock-card__big { margin: 0; font-family: var(--font-display); font-weight: 740; font-size: 84px; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45); }
+.clock-view[data-layout="stacked"] .clock-card__big { font-size: 64px; }
+/* Progress: a hairline that fills in brass. */
+.clock-card__bar { height: 2px; margin: 10px 0 16px; background: var(--cc-faint); }
+.clock-card__bar span { display: block; height: 100%; background: linear-gradient(90deg, #a07a3a, #e2c27a); box-shadow: 0 0 6px rgba(226, 194, 122, 0.45); transition: width 0.9s linear; }
+.clock-card__controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 4px; }
+.clock-btn { padding: 6px 2px; border: 0; background: none; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cc-soft); cursor: pointer; }
+.clock-btn:hover:not(:disabled) { color: var(--cc-ink); text-decoration: underline; text-underline-offset: 5px; text-decoration-color: var(--cc-soft); }
+.clock-btn:disabled { opacity: 0.35; cursor: default; }
+.clock-btn--brass {
+  min-width: 112px; padding: 9px 20px 8px; border-radius: 3px; color: #2c1f0c; text-shadow: 0 1px 0 rgba(255, 240, 200, 0.5); font-weight: 500;
+  background: linear-gradient(180deg, #ecd08c, #c39a4c 52%, #94702f);
+  box-shadow: inset 0 1px 0 rgba(255, 245, 210, 0.75), inset 0 0 0 1px rgba(70, 45, 10, 0.6), 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+.clock-btn--brass:hover:not(:disabled) { color: #1e1406; text-decoration: none; filter: brightness(1.06); }
+.clock-btn--brass:active { transform: translateY(1px); }
+/* Timer lengths: typed, the chosen one ringed in pen. */
+.clock-card__presets { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 12px; }
+.clock-card__preset { position: relative; padding: 3px 2px; border: 0; background: none; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--cc-soft); cursor: pointer; }
+.clock-card__preset:hover { color: var(--cc-ink); }
+.clock-card__preset[aria-pressed="true"] { color: var(--cc-ink); }
+.clock-card__preset[aria-pressed="true"]::before { content: ""; position: absolute; inset: -3px -7px; border: 2px solid var(--pen); border-radius: 50%; transform: rotate(-4deg); opacity: 0.9; }
+.clock-card__num { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--cc-soft); }
+.clock-card__num input {
+  width: 52px; padding: 2px 4px; border: 0; border-bottom: 1px solid var(--cc-soft); border-radius: 0; background: none;
+  font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--cc-ink); font-variant-numeric: tabular-nums;
+}
+.clock-card__num input:focus { outline: none; border-bottom-color: var(--cc-brass); }
+.clock-card__laps { list-style: none; margin: 14px 0 0; padding: 0; max-height: 160px; overflow: auto; font-variant-numeric: tabular-nums; }
+.clock-card__laps li { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; padding: 4px 0; border-bottom: 1px dotted var(--cc-faint); font-family: var(--font-mono); font-size: 12px; color: var(--cc-soft); }
+.clock-card__laps b { color: var(--cc-ink); font-weight: 500; }
+.clock-card__tally { display: flex; align-items: baseline; gap: 12px; margin: 18px 0 0; font-size: 14px; color: var(--cc-soft); }
+.clock-card__tally > span:first-child { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; }
+.clock-card__tally-marks { font-size: 28px; line-height: 0.6; letter-spacing: 0.02em; color: #ef6a5c; text-shadow: none; }
+.clock-card__tally-marks s { margin-right: 8px; text-decoration-thickness: 2px; }
+.clock-card__more { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--cc-faint); font-size: 14px; }
+.clock-card__more summary { cursor: pointer; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cc-soft); }
+.clock-card__more summary:hover { color: var(--cc-ink); }
+.clock-card__nums { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; margin: 14px 0 10px; }
+.clock-card__nums .clock-card__num { justify-content: space-between; }
+.clock-card__check { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 14px; color: var(--cc-ink); cursor: pointer; }
+.clock-card__check input { width: 15px; height: 15px; accent-color: #c39a4c; }
+.clock-card__foot { margin: 16px 0 0; font-family: var(--font-read); font-size: 13px; font-style: italic; color: var(--cc-soft); }
+
+/* While a timer is under way, a chip in the bottom right corner on every page. */
+.timer-chip {
+  position: fixed; z-index: 55; right: 16px; bottom: 14px; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px; border: 0; border-radius: 99px;
+  font-size: 13px; color: var(--ink); cursor: pointer; animation: toast-in 0.3s cubic-bezier(.2,.8,.2,1);
+}
+.timer-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-soft); }
+.timer-chip[data-running] i { background: var(--pen); animation: blink 2s ease-in-out infinite; }
+.timer-chip:is([data-phase="short"], [data-phase="long"])[data-running] i { background: #2f8f5f; }
+.timer-chip span { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
+.timer-chip b { font-weight: 650; font-variant-numeric: tabular-nums; }
+:root[data-clock] .timer-chip { display: none; }
+:root[data-motion="reduced"] .timer-chip[data-running] i { animation: none; }
+@media print { .timer-chip, .clock-card { display: none !important; } }
+
 /* ---------- New case: the folder opens (components/FolderOpen.tsx) ---------- */
 /* The chosen folder leaves the stack: the menu, title and calendar clear the desk for it. */
-.front[data-opening] :is(.front__stage, .desk-cal) { animation: front-away 0.22s ease-in forwards; pointer-events: none; }
+.front[data-opening] :is(.front__stage, .desk-cal-hit, .desk-pen-hit, .desk-clock-hit) { animation: front-away 0.22s ease-in forwards; pointer-events: none; }
 @keyframes front-away { from { opacity: 1; } to { opacity: 0; translate: 0 12px; } }
 .fopen { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; pointer-events: none; perspective: 1800px; }
 .fopen__dim { position: absolute; inset: 0; background: var(--scrim-solid); opacity: 0; animation: fopen-dim 0.4s ease forwards; }
@@ -478,7 +824,7 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
 .fopen__fly { position: absolute; transform-origin: 0 0; }
 .fopen__fly img { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* Arriving by the folder, the setup form takes the sheet's place instead of rising in. */
-:root[data-arrive="folder"] form.paper.rise { animation: none; }
+:root[data-arrive="folder"] .casefolder.rise { animation: none; }
 
 /* ---------- Settings drawer (components/SettingsDrawer.tsx): an index card slid out from the right ---------- */
 .drawer { margin: 0 0 0 auto; height: 100dvh; max-height: none; width: min(460px, 100vw); padding: 0; border: 0; background: transparent; overflow: visible; }
@@ -562,7 +908,8 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
 
 /* ---------- Dossier (app/dossier): a manila file with index tabs ---------- */
 .dossier__avatar { width: 84px; height: 84px; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.35)); }
-.dossier__tabs { display: flex; gap: 6px; padding-left: 14px; }
+.dossier__tabs { display: flex; gap: 6px; padding-left: 14px; overflow-x: auto; scrollbar-width: none; }
+.dossier__tab { white-space: nowrap; flex: none; }
 .dossier__tab { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; padding: 9px 16px 8px; border: 0; border-radius: 8px 8px 0 0; background: #cdb98c; color: #3a2e14; cursor: pointer; }
 .dossier__tab[aria-selected="true"] { background: #ead6a8; box-shadow: inset 0 3px 0 var(--pen); }
 .dossier__body { padding: 30px clamp(18px, 4vw, 44px) 40px; border-radius: 2px 6px 6px 6px; }
@@ -588,6 +935,90 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
 .corkboard__pin span { font-size: 13px; line-height: 1.3; opacity: 0.8; }
 .corkboard__pin[data-earned="false"] img { filter: grayscale(1) contrast(0.8) opacity(0.38); }
 .corkboard__pin[data-earned="false"] b { opacity: 0.6; }
+
+/* ---------- Calibration (components/Calibration.tsx): a brass gauge and pen-drawn charts ---------- */
+:root { --brass-hi: #f3dfa4; --brass: #c39a4c; --brass-lo: #6d4f1c; --dial: #f6efdd; --dial-hi: #fffaf0; }
+.gauge svg { width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 6px 8px rgba(var(--shadow), 0.3)); }
+.gauge__brass-hi { stop-color: var(--brass-hi); }
+.gauge__brass { stop-color: var(--brass); }
+.gauge__brass-lo { stop-color: var(--brass-lo); }
+.gauge__face { stop-color: var(--dial); }
+.gauge__face-hi { stop-color: var(--dial-hi); }
+.gauge__bezel { stroke: rgba(46, 30, 8, 0.45); stroke-width: 0.8; }
+.gauge__zone { fill: none; stroke: var(--pen-wash); stroke-width: 9; }
+.gauge__tick { stroke: var(--ink); stroke-width: 0.8; opacity: 0.7; }
+.gauge__tick[data-long] { stroke-width: 1.6; opacity: 0.9; }
+.gauge__word { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; text-transform: uppercase; fill: var(--ink-soft); }
+.gauge__value { font-family: var(--font-display); font-weight: 760; font-size: 15px; fill: var(--ink); }
+.gauge__needle { transform-origin: 100px 110px; transition: transform 900ms cubic-bezier(0.34, 1.4, 0.5, 1); }
+.gauge__needle path { fill: var(--pen); filter: drop-shadow(1px 2px 1px rgba(0, 0, 0, 0.3)); }
+.gauge__hub { stroke: rgba(46, 30, 8, 0.5); stroke-width: 0.6; }
+@starting-style { .gauge__needle { transform: rotate(-80deg) !important; } }
+:root[data-motion="reduced"] .gauge__needle { transition: none; }
+.chart svg { width: 100%; height: auto; overflow: visible; }
+.chart__grid { stroke: rgba(46, 36, 16, 0.14); stroke-width: 0.8; }
+.chart__axis { font-family: var(--font-mono); font-size: 9px; fill: var(--ink-soft); }
+.chart__ideal { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 3 4; }
+.chart__note { font-family: var(--font-hand); font-size: 15px; fill: var(--ink-soft); }
+.chart__line { fill: none; stroke: var(--pen); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; mix-blend-mode: multiply; }
+.chart__dot { fill: var(--pen); fill-opacity: 0.85; stroke: var(--paper); stroke-width: 1.2; }
+.chart__table { margin-top: 10px; }
+.chart__table table, .ledger { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.chart__table table { margin-top: 8px; max-width: 360px; }
+.chart__table th, .chart__table td, .ledger th, .ledger td { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid rgba(46, 36, 16, 0.14); font-weight: 400; }
+.chart__table thead th, .ledger thead th { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
+.ledger tbody th { font-weight: 600; }
+.ledger td { font-variant-numeric: tabular-nums; }
+.ledger td[data-tone="over"] { color: var(--miss); font-weight: 600; }
+.ledger td[data-tone="under"] { color: var(--catch); font-weight: 600; }
+.ledger__bar { width: 34%; }
+.ledger__bar span { display: block; height: 7px; border-radius: 4px; background: var(--catch); opacity: 0.75; }
+
+/* The reveal's margin note from the Misconception Profile (V06-07): handwritten in pen, after the verdict. */
+.reveal-insight { margin: 14px 0 0; max-width: 40ch; font-family: var(--font-hand); font-size: 27px; line-height: 1.05; color: var(--pen); rotate: -1.2deg; opacity: 0; translate: 0 6px; transition: opacity 500ms ease, translate 500ms cubic-bezier(.2,.8,.2,1); }
+.reveal-insight[data-in] { opacity: 1; translate: 0 0; }
+:root[data-theme="dark"] .reveal-insight { color: color-mix(in srgb, var(--pen) 62%, white); }
+.reveal-insight__link { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--on-desk-soft); text-decoration: underline; text-underline-offset: 4px; white-space: nowrap; }
+
+/* ---------- Weak spots (components/WeakSpots.tsx): index cards on cork, string between related ones ---------- */
+:root { --cork: #b88a55; --cork-dark: #8d6232; --string-subject: #b3261e; --string-type: #2b2f36; }
+.weak-board { position: relative; padding: 26px clamp(12px, 3vw, 28px) 30px; border-radius: 4px; background:
+  radial-gradient(circle at 20% 30%, rgba(255, 235, 200, 0.18) 0 1px, transparent 2px) 0 0 / 11px 13px,
+  radial-gradient(circle at 70% 60%, rgba(60, 30, 5, 0.22) 0 1px, transparent 2px) 0 0 / 9px 7px,
+  radial-gradient(circle at 40% 80%, rgba(60, 30, 5, 0.14) 0 1.5px, transparent 2.5px) 0 0 / 17px 15px,
+  linear-gradient(160deg, var(--cork), var(--cork-dark));
+  box-shadow: inset 0 0 0 7px #6e4c26, inset 0 0 0 9px rgba(0, 0, 0, 0.25), inset 0 0 30px rgba(0, 0, 0, 0.35); }
+.weak-board__strings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: visible; }
+.weak-board__strings[data-layer="over"] { z-index: 2; opacity: 0.22; }
+.weak-board__strings path { fill: none; stroke-width: 1.6; stroke-linecap: round; filter: drop-shadow(1px 2px 1px rgba(0, 0, 0, 0.35)); }
+.weak-board__strings path[data-kind="subject"] { stroke: var(--string-subject); }
+.weak-board__strings path[data-kind="type"] { stroke: var(--string-type); stroke-dasharray: 1 0; opacity: 0.75; }
+.weak-board__cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 28px 22px; position: relative; z-index: 1; }
+.weak-board__cards li { transform: rotate(var(--r)); }
+.weak-card { position: relative; display: grid; gap: 7px; width: 100%; min-height: 170px; padding: 30px 16px 14px; text-align: left; cursor: pointer; border: 0; border-radius: 2px;
+  background: linear-gradient(var(--paper), var(--paper)) padding-box, var(--paper);
+  background-image: linear-gradient(transparent 48px, rgba(207, 32, 39, 0.35) 48px 49.5px, transparent 49.5px), repeating-linear-gradient(transparent 0 23px, rgba(31, 86, 184, 0.13) 23px 24px);
+  box-shadow: 2px 5px 10px rgba(0, 0, 0, 0.35); transition: transform 160ms cubic-bezier(.2,.8,.2,1), box-shadow 160ms; }
+.weak-card:hover, .weak-card:focus-visible { transform: translateY(-3px) rotate(-0.6deg); box-shadow: 4px 10px 16px rgba(0, 0, 0, 0.38); }
+.weak-card__pin { position: absolute; top: 6px; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; z-index: 3;
+  background: radial-gradient(circle at 35% 30%, #ff8a80, var(--string-subject) 55%, #5e0f0b); box-shadow: 1px 3px 3px rgba(0, 0, 0, 0.45); }
+.weak-card__type { font-size: 10px; }
+.weak-card__label { font-family: var(--font-display); font-weight: 720; font-stretch: 86%; font-size: 19px; line-height: 1.12; color: var(--ink); text-wrap: balance; }
+.weak-card__tally { font-size: 13.5px; color: var(--ink-soft); }
+.weak-card__strength { display: block; height: 5px; border-radius: 3px; background: rgba(46, 36, 16, 0.12); overflow: hidden; align-self: end; }
+.weak-card__strength span { display: block; height: 100%; background: var(--miss); }
+.weak-card__due { position: absolute; right: 10px; top: 8px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pen); border: 1.5px solid var(--pen); padding: 1px 6px; transform: rotate(8deg); opacity: 0.85; }
+.weak-legend { display: inline-block; width: 18px; height: 0; vertical-align: middle; margin-right: 4px; border-top: 2px solid var(--string-subject); }
+.weak-legend[data-kind="type"] { border-color: var(--string-type); }
+.weak-detail { width: min(560px, 100vw); }
+.weak-detail__body { height: 100%; overflow-y: auto; padding: 28px 28px 40px; border-radius: 0; }
+.weak-detail__history { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 16px; }
+.weak-detail__history li { display: grid; gap: 5px; padding-top: 12px; border-top: 1px dashed var(--paper-edge); }
+.weak-detail__history [data-outcome="missed"] { color: var(--miss); }
+.weak-detail__history [data-outcome="caught"] { color: var(--catch); }
+.weak-detail__sab { font-family: var(--font-read); font-size: 16px; text-decoration: line-through; text-decoration-color: var(--pen); text-decoration-thickness: 1.5px; }
+.weak-detail__orig { font-family: var(--font-read); font-size: 16px; }
+.weak-detail__orig::before { content: "→ "; color: var(--catch); }
 
 /* ---------- Round-end progress strip (components/ProgressStrip.tsx) ---------- */
 .pstrip {
@@ -648,3 +1079,138 @@ kbd { font-family: var(--font-mono); font-size: 12px; padding: 2px 7px; border-r
   .sentence.is-redacted { color: inherit !important; background: none !important; }
   main { padding-top: 0 !important; }
 }
+
+/* ---------- The open case folder on the New case page (components/CaseFolder.tsx) ----------
+   The same pieces as the folder that opens on the home page. Each panel is 9-sliced: corners, the tab
+   and the score lines keep their shape; only the plain manila in between stretches with the form.
+   Slices are in the images' own pixels (both 805 wide); --k converts them to this panel's width. */
+.casefolder {
+  container-type: inline-size; position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: stretch;
+  width: min(1180px, 100%); margin: 2.4cqw auto 0; filter: drop-shadow(8px 16px 18px rgba(0, 0, 0, 0.32));
+  --pw: 50cqw; --k: calc(var(--pw) / 805);
+}
+.casefolder__cover, .casefolder__back { position: relative; min-width: 0; border-style: solid; }
+.casefolder__cover {
+  border-image: url("/assets/folder/open-inside.webp") 12 30 12 12 fill stretch;
+  border-width: calc(12 * var(--k)) calc(30 * var(--k)) calc(12 * var(--k)) calc(12 * var(--k));
+  margin-top: calc(33 * var(--k)); /* the cover is shorter than the back panel by its tab strip */
+  filter: brightness(0.94);
+}
+.casefolder__back {
+  border-image: url("/assets/folder/open-base.webp") 80 12 50 12 fill stretch;
+  border-width: calc(80 * var(--k)) calc(12 * var(--k)) calc(50 * var(--k)) calc(12 * var(--k));
+  padding: calc(6 * var(--k)) calc(40 * var(--k)) calc(14 * var(--k));
+}
+/* The spine: the cover's fold casts a soft shadow on the back panel. */
+.casefolder__back::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(-12 * var(--k)); width: 26px; pointer-events: none; background: linear-gradient(90deg, rgba(60, 40, 10, 0.28), transparent); }
+/* A typed label on the tab (the tab sits at 535–800 px of the 805-px panel, above the panel's top edge). */
+.casefolder__tab { position: absolute; top: calc(-80 * var(--k) + 8 * var(--k)); left: calc(523 * var(--k)); width: calc(265 * var(--k)); height: calc(22 * var(--k) + 8px); display: grid; place-items: center; }
+.casefolder__tab b { font-family: var(--font-mono); font-weight: 500; font-size: clamp(8px, calc(13 * var(--k)), 13px); letter-spacing: 0.12em; text-transform: uppercase; color: #3d3220; background: #f6f1e4; padding: 3px 8px 2px; border-radius: 2px; box-shadow: 0 1px 1px rgba(0, 0, 0, 0.15); white-space: nowrap; }
+.casefolder__sheet { position: relative; }
+.casefolder__sheet::after { content: ""; position: absolute; inset: auto 0 -6px 6px; height: 8px; background: #f3efe5; z-index: -1; transform: rotate(-0.6deg); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12); }
+
+/* Inside the cover: HQ's note in pen, the routing slip, the procedure card and a stamp. */
+.cover-notes { position: relative; height: 100%; display: flex; flex-direction: column; gap: clamp(18px, 3cqw, 34px); padding: clamp(22px, 4cqw, 46px) clamp(18px, 3.4cqw, 40px); color: #2e2410; }
+.routing-slip { position: relative; align-self: flex-start; width: min(100%, 300px); padding: 22px 20px 16px; background: #fbf8f1; transform: rotate(-2.2deg); box-shadow: 0 1px 0 #e3dccb, 3px 6px 10px rgba(60, 40, 10, 0.22); font-family: var(--font-mono); font-size: 12.5px; color: #2b2b2b; }
+.routing-slip__head { margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1.5px solid #2b2b2b; font-weight: 500; letter-spacing: 0.24em; text-transform: uppercase; }
+.routing-slip dl { display: grid; grid-template-columns: 6.5em 1fr; gap: 5px 8px; margin: 0; }
+.routing-slip dt { color: #77705f; text-transform: uppercase; letter-spacing: 0.1em; font-size: 10.5px; align-self: end; }
+.routing-slip dd { margin: 0; border-bottom: 1px dotted #b9b19d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; color: #1d2a5c; font-family: var(--font-hand); font-size: 22px; line-height: 1; }
+.paperclip { position: absolute; top: -30px; right: 30px; width: 19px; height: auto; filter: drop-shadow(1px 2px 1.5px rgba(0, 0, 0, 0.35)); transform: rotate(5deg); }
+.cover-notes__pen { margin: 0; font-size: clamp(36px, 4.6cqw, 58px); line-height: 0.95; color: #1d2a5c; transform: rotate(-3deg); text-wrap: balance; }
+.cover-notes__pen span { color: var(--pen); text-decoration: underline 2px var(--pen); text-underline-offset: 6px; }
+/* The ruled index card (public/assets/props/index-card.webp). Its red line sits at 14.11% of its
+   height and the blue rules start at 22.20%, every 8.07% (measured by scripts/assets/batch7.py): the
+   heading fills the band above the red line and each typed line is one rule tall, so text sits on them. */
+.index-card {
+  position: relative; align-self: flex-end; width: min(100%, 360px); aspect-ratio: 900 / 581; container-type: size; transform: rotate(1.6deg);
+  background: url("/assets/props/index-card.webp") center / 100% 100% no-repeat; filter: drop-shadow(3px 6px 6px rgba(60, 40, 10, 0.25));
+  font-family: var(--font-mono); color: #2b2b2b;
+}
+.index-card__head { height: 14.11cqh; margin: 0; padding-left: 7cqw; display: flex; align-items: flex-end; padding-bottom: 1.6cqh; font-size: 3.4cqw; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 500; color: var(--pen); }
+.index-card ol { margin: 0 6cqw 0 7cqw; padding: 0.6cqh 0 0 1.4em; list-style: decimal; font-size: 3.5cqw; line-height: 8.07cqh; }
+.cover-notes__stamp { position: absolute; right: 9%; bottom: 7%; font-size: clamp(18px, 2.6cqw, 30px); opacity: 0.42; rotate: -14deg; --ink-x: 62%; --ink-y: 28%; }
+
+/* Phones and narrow windows: just the back panel with its tab; the pen note sits on it above the sheet. */
+@media (max-width: 1023px) {
+  .casefolder { grid-template-columns: 1fr; --pw: 100cqw; }
+  .casefolder__cover { display: none; }
+  .casefolder__back::before { display: none; }
+}
+.casefolder__note { display: none; }
+@media (max-width: 1023px) {
+  .casefolder__tab b { padding: 2px 5px 1px; letter-spacing: 0.08em; }
+  .casefolder__note { display: block; margin: 4px 4px 14px; font-size: clamp(30px, 8cqw, 44px); line-height: 0.95; color: #1d2a5c; transform: rotate(-2deg); }
+  .casefolder__note span { color: var(--pen); }
+  .casefolder__back { padding: calc(10 * var(--k)) calc(24 * var(--k)) calc(20 * var(--k)); }
+}
+
+/* ---------- Autopsy (app/autopsy): a steel tray, toe-tag findings, check questions ---------- */
+/* The steel tray: the photographed one (public/assets/tray/steel-*.webp, scripts/assets/batch11.py) as a
+   9-slice round the sheet (slices in its 2× pixels; the corners take in the rim's and the slope's
+   curves), on its own layer so the shadow follows the steel, in the desk's light like the menu's tray.
+   Its brass plate is a separate piece. */
+.autopsy-tray { --sk: 0.4; position: relative; padding: calc(104px * var(--sk)) calc(104px * var(--sk)) calc(140px * var(--sk)); }
+.autopsy-tray__steel {
+  position: absolute; inset: 0; pointer-events: none;
+  border-image: var(--tray-steel) 200 200 220 fill / calc(200px * var(--sk)) calc(200px * var(--sk)) calc(220px * var(--sk));
+  filter: var(--tray-contact) var(--tray-cast);
+}
+.autopsy-tray__plate {
+  position: absolute; z-index: 1; left: 50%; bottom: calc(34px * var(--sk)); translate: -50% 0;
+  width: calc(325px * var(--sk)); height: calc(94px * var(--sk)); display: grid; place-items: center;
+  background: url("/assets/tray/steel-plate.webp") center / 100% 100% no-repeat;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(55, 36, 8, 0.85); text-shadow: 0 1px 0 rgba(255, 238, 190, 0.45);
+}
+.autopsy-tray__sheet { position: relative; padding: clamp(20px, 4vw, 34px); border-radius: 3px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 3px 8px rgba(0, 0, 0, 0.18); }
+.autopsy-tray__parsed { padding: 12px 14px; border-left: 3px solid var(--catch); background: var(--paper-sunk); }
+.autopsy-tray__thumb { height: 64px; width: auto; border-radius: 3px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
+.toe-tags { display: grid; gap: 22px; max-width: 820px; }
+/* The tag: the photographed card (public/assets/tag/card.webp, scripts/assets/batch11.py) as a 9-slice
+   that grows with its text (slices in its pixels; the left ones take in the cut corners), and its
+   eyelet and string as a fixed piece on the left edge, the hole at mid-height. */
+.toe-tag {
+  --tg: 0.6; position: relative; padding: 22px 26px 22px calc(140px * var(--tg)); color: var(--ink);
+  border-image: url("/assets/tag/card.webp") 64 34 64 84 fill / calc(64px * var(--tg)) calc(34px * var(--tg)) calc(64px * var(--tg)) calc(84px * var(--tg));
+}
+.toe-tag-wrap { filter: drop-shadow(2px 6px 6px rgba(0, 0, 0, 0.3)); transition: opacity 300ms ease; }
+.toe-tag__eyelet {
+  position: absolute; left: calc(-174px * var(--tg)); top: calc(50% - 55.5px * var(--tg)); width: calc(301px * var(--tg)); height: calc(311px * var(--tg));
+  background: url("/assets/tag/eyelet.webp") 0 0 / 100% 100% no-repeat; pointer-events: none;
+}
+.toe-tag__head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.toe-tag__q { font-family: var(--font-read); font-size: 18px; line-height: 1.4; margin: 0 0 10px; }
+.toe-tag__answers { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; margin: 0 0 12px; }
+.toe-tag__answers dd { margin: 2px 0 0; font-size: 16px; }
+.toe-tag__wrong { text-decoration: line-through; text-decoration-color: var(--pen); text-decoration-thickness: 1.5px; }
+.toe-tag__finding { padding-top: 10px; border-top: 1px dashed rgba(90, 64, 20, 0.35); }
+.toe-tag__label { font-family: var(--font-hand); font-size: 27px; line-height: 1.05; color: var(--pen); margin: 0; }
+.toe-tag__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.toe-tag__stamp { display: block; width: fit-content; margin: 14px 0 0 auto; rotate: -6deg; }
+.toe-tag-wrap[data-slip] { opacity: 0.72; }
+.toe-tag-wrap[data-slip] .toe-tag__label { color: var(--ink-soft); }
+.toe-tag-wrap[data-verdict="slip"], .toe-tag-wrap[data-verdict="rejected"] { opacity: 0.6; }
+.autopsy-treatment, .autopsy-report { padding: clamp(20px, 4vw, 36px); max-width: 820px; }
+.autopsy-report__row { display: grid; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--paper-edge); }
+.check-q__option { display: grid; grid-template-columns: 28px 1fr auto; align-items: baseline; gap: 10px; padding: 10px 14px; border: 1.5px solid var(--paper-edge); border-radius: 6px; cursor: pointer; background: var(--paper); transition: border-color 140ms, background 140ms; }
+.check-q__option:hover, .check-q__option:has(input:focus-visible) { border-color: var(--ink-soft); }
+.check-q__option b { font-family: var(--font-mono); font-size: 13px; }
+.check-q__option[data-state="chosen"] { border-color: var(--ink); background: var(--paper-sunk); }
+.check-q__option[data-state="right"] { border-color: var(--catch); background: var(--catch-wash); }
+.check-q__option[data-state="wrong"] { border-color: var(--miss); background: var(--miss-wash); }
+.check-q__trap { font-family: var(--font-mono); font-size: 10.5px; font-style: normal; letter-spacing: 0.1em; text-transform: uppercase; color: var(--miss); }
+@media (max-width: 560px) {
+  .autopsy-tray { --sk: 0.28; }
+  .autopsy-tray__plate { font-size: 7px; letter-spacing: 0.16em; }
+  .toe-tag { --tg: 0.45; padding: 18px 16px 18px calc(140px * var(--tg)); }
+  /* No room beside the tag for the loose string: it fades out just past the card's edge. */
+  .toe-tag__eyelet {
+    -webkit-mask: linear-gradient(90deg, transparent calc(174px * var(--tg) - 9px), #000 calc(174px * var(--tg) - 3px));
+    mask: linear-gradient(90deg, transparent calc(174px * var(--tg) - 9px), #000 calc(174px * var(--tg) - 3px));
+  }
+  .toe-tag__answers { grid-template-columns: 1fr; }
+}
+.autopsy-intro { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 20px; margin-bottom: 20px; padding: 14px 18px; border: 1.5px dashed var(--paper-edge); border-radius: 6px; }
+.autopsy-intro ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 15px; max-width: 62ch; }
+.weak-card__tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
+.weak-card__tag--resolved { color: var(--catch); }

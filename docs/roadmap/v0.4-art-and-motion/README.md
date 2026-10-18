@@ -95,3 +95,9 @@ See [loupe-rebuild.md](loupe-rebuild.md), [background-scenes.md](background-scen
 - ☑ New case: the folder opens in 3D (built from the two stills; the generated opening clip cut to a different folder halfway). The sheet inside lifts and the setup form appears in its place.
 - ☐ Per-verdict stamp clips and the calendar page flip are still optional.
 - ☑ Folder opening fixes: the menu stack, title and calendar now clear away instead of showing under the folder; no full-folder `filter` (it flattened the 3D flip); the open folder is held across navigation and the sheet flies onto the setup form's exact spot, then fades to reveal it (no dark gap, no double dimming, no form popping in late).
+
+**Batches 7–10 (16–17 Oct):** case-folder clip and index card, calendar and pen, menu tray, the desk clock.
+- ☑ Calendar and pen are lit from the desk photos themselves (`desk_props.py`), so they sit in every light.
+- ☑ Menu folders are full folders stacked in a desk tray, cut off by its front rail.
+- ☑ The desk clock keeps real time with photographed hands, and runs focus rounds, a timer and a stopwatch; the alarm shakes it. Clicking it zooms into a close-up with the controls beside it.
+- ✗ (for now) The camera move from the desk to the clock (`fx/clock-pan*`) is switched off (`PAN_ON` in `components/Clock.tsx`): the generated footage turns the drum clock into a twin-bell clock at frame 22. Re-generate it from two fixed frames (the hands-free night desk and a matching close-up), then switch it back on and draw the live hands along the tracked dial.

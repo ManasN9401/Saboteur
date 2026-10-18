@@ -2,10 +2,13 @@
 /* eslint-disable @next/next/no-img-element -- pre-sized pin art */
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/Avatar";
+import { Calibration } from "@/components/Calibration";
 import { Cross, Ring, Snowflake } from "@/components/PenMarks";
 import { useRedactedNavigate } from "@/components/RedactionTransition";
+import { WeakSpots } from "@/components/WeakSpots";
+import { buildLearning } from "@/lib/learning/model";
 import { openSettings } from "@/lib/events";
 import { deleteProfile, updateProfile } from "@/lib/profile/profiles";
 import { AVATARS, PROFILE_COLOURS, type Profile, type Stats } from "@/lib/profile/schema";
@@ -14,17 +17,31 @@ import { addDays, dayKey, weekday } from "@/lib/progress/day";
 import { FREEZE_EVERY, liveStreak, MAX_FREEZES } from "@/lib/progress/streak";
 import { progressOf, RANKS, xpFor } from "@/lib/progress/xp";
 import { toast } from "@/lib/toast";
-import { useActiveProfile, useIsClient, useStats } from "@/lib/useStore";
+import { useActiveProfile, useIsClient, useRounds, useStats } from "@/lib/useStore";
 
-type Tab = "record" | "badges" | "profile";
+type Tab = "record" | "calibration" | "weak" | "badges" | "profile";
+const TABS: Tab[] = ["record", "calibration", "weak", "badges", "profile"];
 const WEEKS = 12;
 
 export default function DossierPage() {
   const isClient = useIsClient();
   const profile = useActiveProfile();
   const stats = useStats();
-  const [tab, setTab] = useState<Tab>("record");
-  if (!isClient || !profile || !stats) return <main className="min-h-[70vh]" aria-busy="true" />;
+  const rounds = useRounds();
+  const [tab, setTab] = useState<Tab>(() => (typeof window !== "undefined" && TABS.includes(window.location.hash.slice(1) as Tab) ? (window.location.hash.slice(1) as Tab) : "record"));
+  // Profiles that haven't closed a case since v0.6 learn from their saved rounds on the fly.
+  const learning = useMemo(() => (stats ? (stats.learning ?? buildLearning(rounds ?? {})) : null), [stats, rounds]);
+  // Links can open a tab directly (/dossier#weak), including from this page.
+  useEffect(() => {
+    const follow = () => {
+      const h = window.location.hash.slice(1) as Tab;
+      if (TABS.includes(h)) setTab(h);
+    };
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, []);
+  const [now] = useState(() => (typeof window === "undefined" ? "" : new Date().toISOString()));
+  if (!isClient || !profile || !stats || !learning) return <main className="min-h-[70vh]" aria-busy="true" />;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-24 pt-4 sm:px-8">
@@ -38,14 +55,28 @@ export default function DossierPage() {
 
       <div className="dossier rise" style={{ animationDelay: "60ms" }}>
         <div className="dossier__tabs" role="tablist" aria-label="Dossier sections">
-          {(["record", "badges", "profile"] as Tab[]).map((t) => (
-            <button key={t} type="button" role="tab" id={`dossier-tab-${t}`} aria-selected={tab === t} aria-controls="dossier-panel" className="dossier__tab" onClick={() => setTab(t)}>
-              {t === "record" ? "Record" : t === "badges" ? `Badges · ${Object.keys(stats.badges).length}/${BADGES.length}` : "Profile"}
+          {TABS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              id={`dossier-tab-${t}`}
+              aria-selected={tab === t}
+              aria-controls="dossier-panel"
+              className="dossier__tab"
+              onClick={() => {
+                setTab(t);
+                history.replaceState(null, "", t === "record" ? location.pathname : `#${t}`);
+              }}
+            >
+              {{ record: "Record", calibration: "Calibration", weak: "Weak spots", badges: `Badges · ${Object.keys(stats.badges).length}/${BADGES.length}`, profile: "Profile" }[t]}
             </button>
           ))}
         </div>
         <section id="dossier-panel" role="tabpanel" aria-labelledby={`dossier-tab-${tab}`} className="paper paper--manila dossier__body">
           {tab === "record" && <Record profile={profile} stats={stats} />}
+          {tab === "calibration" && <Calibration learning={learning} />}
+          {tab === "weak" && <WeakSpots learning={learning} now={now} />}
           {tab === "badges" && <Corkboard stats={stats} />}
           {tab === "profile" && <ProfileTab profile={profile} />}
         </section>

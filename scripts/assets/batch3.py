@@ -1,6 +1,7 @@
 """Batch 3: avatar pins, badge pins, desk calendar, stamp ink (roadmap A-11, A-12, A-13).
 
     python3 scripts/assets/batch3.py SRC_DIR OUT_DIR
+    python3 scripts/assets/batch3.py SRC_DIR OUT_DIR --badge NAME   # one pin, SRC_DIR/NAME.jpg (later badges)
 
 - Pin sheets (4 × 3 on green) are keyed, then split into single pins by the empty gaps between them.
 - The calendar sits on a muted green, not chroma green, so it is keyed by colour distance instead.
@@ -17,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cutout import despill, key, remove_specks  # noqa: E402
 from plates import fill, star_mask  # noqa: E402
 
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 AVATARS = ["owl", "fox", "raven", "otter", "cat", "hound", "heron", "hare", "badger", "stag", "magpie", "tortoise"]
 # The second badge sheet (batch 6) repeats its middle row as its last row: only the first 8 are used.
 BADGES_2 = ["week-on-the-case", "stakeout", "centurion", "did-the-reading", "off-the-grid", "comeback", "coroner", "root-cause"]
@@ -111,13 +113,17 @@ def ink(path: str, out: str):
 
 def main():
     src, out = sys.argv[1], sys.argv[2]
+    if len(sys.argv) > 4 and sys.argv[3] == "--badge":
+        split_sheet(f"{src}/{sys.argv[4]}.jpg", [sys.argv[4]], f"{out}/badges", expect=1)
+        return
     if len(sys.argv) > 3 and sys.argv[3] == "--badges2":
         split_sheet(f"{src}/badges2.jpg", BADGES_2, f"{out}/badges", expect=12)
         return
     split_sheet(f"{src}/avatars.jpg", AVATARS, f"{out}/avatars")
     split_sheet(f"{src}/badges.jpg", BADGES, f"{out}/badges")
-    os.makedirs(f"{out}/props", exist_ok=True)
-    calendar(f"{src}/calendar.jpg", f"{out}/props/calendar")
+    # The keyed calendar is an input to desk_props.py, not served: it goes with the sources.
+    os.makedirs(f"{ROOT}/assets-src/props", exist_ok=True)
+    calendar(f"{src}/calendar.jpg", f"{ROOT}/assets-src/props/calendar")
     os.makedirs(f"{out}/texture", exist_ok=True)
     ink(f"{src}/ink.jpg", f"{out}/texture/ink")
     with open(f"{out}/manifest.json", "w") as f:

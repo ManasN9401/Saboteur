@@ -77,16 +77,21 @@ function release() {
 }
 
 /**
- * Called by the setup page as it appears: the lifted sheet travels to where the form sits, the folder
- * and the dimming fade away, and the form fades in over the sheet, so the sheet becomes the form.
+ * Called by the setup page as it appears. The page is the same folder lying open on the desk, so the
+ * held folder moves and scales onto it while its lifted sheet flies onto the form; then the held copy
+ * crossfades into the page's own folder and the notes on the cover fade in.
  */
 export function landFolderSheet(form: HTMLElement) {
   if (!held) return;
   const scene = held;
   const sheet = scene.querySelector<HTMLElement>(".fopen__paper");
   const folder = scene.querySelector<HTMLElement>(".fopen__folder");
+  const base = scene.querySelector<HTMLElement>(".fopen__base");
   const dim = scene.querySelector<HTMLElement>(".fopen__dim");
-  if (!sheet || !folder || !dim) return release();
+  const page = form.closest<HTMLElement>("[data-casefolder]");
+  const panel = page?.querySelector<HTMLElement>(".casefolder__back");
+  const notes = page?.querySelector<HTMLElement>(".cover-notes");
+  if (!sheet || !folder || !base || !dim || !page || !panel) return release();
   window.clearTimeout(giveUp);
 
   const from = sheet.getBoundingClientRect();
@@ -99,22 +104,33 @@ export function landFolderSheet(form: HTMLElement) {
   Object.assign(fly.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` });
   scene.append(fly);
   sheet.style.visibility = "hidden";
-  form.style.opacity = "0";
+  page.style.opacity = "0";
+  if (notes) notes.style.opacity = "0";
 
   const travel = { duration: 520, easing: "cubic-bezier(.3,0,.15,1)", fill: "forwards" } as const;
   const start = `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`;
   fly.animate({ transform: [start, "none"], boxShadow: ["0 22px 36px rgba(0,0,0,.38)", "0 2px 6px rgba(0,0,0,.18)"] }, travel);
-  folder.animate({ opacity: [1, 0], scale: [1, 0.97] }, { duration: 180, easing: "ease-out", fill: "forwards" });
+  // The folder's back panel lands on the page's back panel; the open cover comes along beside it.
+  const b = base.getBoundingClientRect();
+  const p = panel.getBoundingClientRect();
+  folder.style.transformOrigin = "0 0";
+  folder.animate({ transform: ["none", `translate(${p.left - b.left}px, ${p.top - b.top}px) scale(${p.width / b.width}, ${p.height / b.height})`] }, travel);
   dim.animate({ opacity: [Number(getComputedStyle(dim).opacity), 0] }, { duration: 520, easing: "ease-out", fill: "forwards" });
 
   window.setTimeout(() => {
-    // The form is solid paper under the sheet: fading only the sheet keeps the desk from showing through.
-    form.style.opacity = "";
-    // Clearing data-arrive restarts the form's entrance; it has already arrived, so skip to the end.
+    const swap = { duration: 220, easing: "ease-in-out", fill: "forwards" } as const;
+    // Clearing data-arrive restarts the page's entrance; it has already arrived, so skip to the end.
     const done = () => {
+      page.style.opacity = "";
       release();
-      for (const a of form.getAnimations()) a.finish();
+      for (const a of page.getAnimations()) a.finish();
     };
-    fly.animate({ opacity: [1, 0] }, { duration: 240, easing: "ease-in-out", fill: "forwards" }).finished.then(done, done);
-  }, 400);
+    page.animate({ opacity: [0, 1] }, swap);
+    folder.animate({ opacity: [1, 0] }, swap);
+    fly.animate({ opacity: [1, 0] }, swap).finished.then(done, done);
+    if (notes) {
+      notes.style.opacity = "";
+      notes.animate({ opacity: [0, 1], translate: ["0 6px", "0 0"] }, { duration: 380, delay: 200, easing: "ease-out", fill: "backwards" });
+    }
+  }, 380);
 }

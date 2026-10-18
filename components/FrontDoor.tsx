@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import { DeskCalendar } from "./DeskCalendar";
 import { DeskDust } from "./DeskDust";
+import { DeskClock } from "./DeskClock";
 import { DeskLamp } from "./DeskLamp";
+import { DeskPen } from "./DeskPen";
 import { DeskSteam } from "./DeskSteam";
 import { FolderArt } from "./FolderArt";
 import { FolderOpen, preloadFolderOpen } from "./FolderOpen";
@@ -20,6 +22,10 @@ import { getDevicePrefs, setActive } from "@/lib/profile/profiles";
 import { MAX_PROFILES } from "@/lib/profile/schema";
 import { liveStreak } from "@/lib/progress/streak";
 import { progressOf } from "@/lib/progress/xp";
+import { prepareDrill } from "@/lib/learning/drill";
+import { buildLearning } from "@/lib/learning/model";
+import type { Learning } from "@/lib/learning/schema";
+import { dueReviews, nextReview, queued, relativeDay, reviewBatch } from "@/lib/learning/views";
 import { toast } from "@/lib/toast";
 import { useIsClient, useProfiles, useRounds, useStats } from "@/lib/useStore";
 
@@ -37,6 +43,17 @@ interface Item {
 const SEEN_KEY = "saboteur:v1:title-seen";
 // Where each folder's tab sits along its top edge, staggered like a filing drawer.
 const TAB_POSITIONS = [0.62, 0.92, 0.36, 0.78, 0.12, 0.5, 1];
+// How each folder lies in the tray: a few px off true and a fraction of a degree, so the pile's side
+// edges step like real folders rather than one cut-out column. Fixed, so it never shuffles.
+const LIE = [
+  [-3, -0.35],
+  [2, 0.25],
+  [-1, -0.15],
+  [3, 0.3],
+  [-2, -0.25],
+  [1, 0.15],
+  [0, 0],
+];
 const FALLBACK_TOPICS = ["Photosynthesis", "The water cycle", "Newton's laws of motion", "Supply and demand", "Plate tectonics"];
 
 /** Skip the title card? Settings → Device chooses always, once per session (default) or never. */
@@ -131,6 +148,16 @@ function FrontDoorInner({ startInMenu }: { startInMenu: boolean }) {
   const restDays = all?.profiles.find((p) => p.id === all.activeId)?.prefs.restDays ?? [];
   const streakNow = stats ? liveStreak(stats.streak, today(), restDays).current : 0;
   const todaysDaily = daily ? rounds?.[daily.id] : undefined;
+  // The review queue (V06-06). Profiles from before v0.6 learn from their saved rounds on the fly.
+  const learning = useMemo(() => (stats ? (stats.learning ?? buildLearning(rounds ?? {})) : null), [stats, rounds]);
+  const nowIso = useMemo(() => new Date(openedAt).toISOString(), [openedAt]);
+
+  function reviewHint(l: Learning) {
+    const due = dueReviews(l, nowIso);
+    if (due.length) return `${due.length} due · “${due[0].label}”`;
+    const next = nextReview(l, nowIso);
+    return next ? `Nothing due · next ${relativeDay(next, nowIso)}` : "Nothing due";
+  }
 
   function dailyHint() {
     if (dailyBusy) return "Opening the file…";
@@ -196,6 +223,30 @@ function FrontDoorInner({ startInMenu }: { startInMenu: boolean }) {
         hint: dailyHint(),
         run: () => void playDaily(),
       },
+      ...(learning && queued(learning)
+        ? [
+            {
+              id: "review",
+              label: "Review case",
+              hint: reviewHint(learning),
+              run: () => {
+                const batch = reviewBatch(learning, nowIso);
+                if (!batch.length) {
+                  const next = nextReview(learning, nowIso);
+                  return toast(next ? `Nothing due yet. The next review comes up ${relativeDay(next, nowIso)}.` : "Nothing due for review.");
+                }
+                const topic = prepareDrill(batch, true);
+                navigate("/play", `REVIEW CASE · ${topic.toUpperCase()}`);
+              },
+            },
+          ]
+        : []),
+      {
+        id: "autopsy",
+        label: "Autopsy",
+        hint: "Bring your wrong answers: find the belief behind each",
+        run: () => navigate("/autopsy", "AUTOPSY"),
+      },
       {
         id: "archive",
         label: "Archive",
@@ -212,7 +263,7 @@ function FrontDoorInner({ startInMenu }: { startInMenu: boolean }) {
     );
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dailyHint/playDaily read the values listed
-  }, [unfinished, closedCount, engine, navigate, daily, dailyBusy, rounds, stats, streakNow]);
+  }, [unfinished, closedCount, engine, navigate, daily, dailyBusy, rounds, stats, streakNow, learning, nowIso]);
 
   const canRecruit = (all?.profiles.length ?? 0) < MAX_PROFILES;
   const picks = useRef<(HTMLButtonElement | null)[]>([]);
@@ -231,6 +282,8 @@ function FrontDoorInner({ startInMenu }: { startInMenu: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // The desk calendar and the profile chip have keys of their own.
+      if ((e.target as HTMLElement | null)?.closest?.(".desk-cal-hit, .desk-pen-hit, .desk-clock-hit, .clock-card, .profile-chip, dialog")) return;
       if (stage === "title") {
         if (e.key === "Tab" || e.key === "Shift") return;
         e.preventDefault();
@@ -301,6 +354,8 @@ function FrontDoorInner({ startInMenu }: { startInMenu: boolean }) {
       <DeskDust />
       <DeskSteam />
       <DeskLamp />
+      <DeskClock />
+      <DeskPen />
       <DeskCalendar />
 
       <div className="front__stage">
@@ -365,41 +420,49 @@ function FrontDoorInner({ startInMenu }: { startInMenu: boolean }) {
           </section>
         ) : (
           <nav className="front__menu" aria-label="Main menu">
-            <ul>
-              {items.map((item, i) => (
-                <li key={item.id} style={{ "--i": i } as React.CSSProperties}>
-                  <button
-                    ref={(el) => {
-                      buttons.current[i] = el;
-                    }}
-                    type="button"
-                    className="folder"
-                    data-focus={i === current}
-                    aria-current={i === current ? "true" : undefined}
-                    aria-disabled={item.locked || undefined}
-                    aria-describedby="front-hint"
-                    onMouseEnter={(e) => {
-                      setFocus(i);
-                      e.currentTarget.focus({ preventScroll: true });
-                    }}
-                    onFocus={() => setFocus(i)}
-                    onClick={() => choose(i)}
+            {/* The folders lie in an open wooden tray: its front rail cuts the pile off. */}
+            <div className="tray">
+              <div className="tray__wood" aria-hidden="true" />
+              <ul style={{ "--n": items.length } as React.CSSProperties}>
+                {items.map((item, i) => (
+                  <li
+                    key={item.id}
+                    style={{ "--i": i, "--dx": `${LIE[i % LIE.length][0]}px`, "--rot": `${LIE[i % LIE.length][1]}deg` } as React.CSSProperties}
                   >
-                    <FolderArt tabAt={TAB_POSITIONS[i % TAB_POSITIONS.length]} label={`No. ${String(i + 1).padStart(2, "0")}`} foot={i === items.length - 1} />
-                    <span className="folder__label">{item.label}</span>
-                    {item.locked && (
-                      <svg className="folder__lock" viewBox="0 0 16 16" aria-label="Locked" role="img">
-                        <path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="currentColor" strokeWidth="1.6" />
-                        <rect x="3" y="7" width="10" height="7.5" rx="1.2" fill="currentColor" />
-                      </svg>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <p id="front-hint" className="front__hint" aria-live="polite">
-              {items[current]?.hint}
-            </p>
+                    <button
+                      ref={(el) => {
+                        buttons.current[i] = el;
+                      }}
+                      type="button"
+                      className="folder"
+                      data-focus={i === current}
+                      aria-current={i === current ? "true" : undefined}
+                      aria-disabled={item.locked || undefined}
+                      aria-describedby="front-hint"
+                      onMouseEnter={(e) => {
+                        setFocus(i);
+                        e.currentTarget.focus({ preventScroll: true });
+                      }}
+                      onFocus={() => setFocus(i)}
+                      onClick={() => choose(i)}
+                    >
+                      <FolderArt tabAt={TAB_POSITIONS[i % TAB_POSITIONS.length]} label={`No. ${String(i + 1).padStart(2, "0")}`} />
+                      <span className="folder__label">{item.label}</span>
+                      {item.locked && (
+                        <svg className="folder__lock" viewBox="0 0 16 16" aria-label="Locked" role="img">
+                          <path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                          <rect x="3" y="7" width="10" height="7.5" rx="1.2" fill="currentColor" />
+                        </svg>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {/* The brass label holder on the front rail says what the chosen folder is for. */}
+              <p id="front-hint" className="tray__plate" aria-live="polite">
+                <span>{items[current]?.hint}</span>
+              </p>
+            </div>
           </nav>
         )}
       </div>

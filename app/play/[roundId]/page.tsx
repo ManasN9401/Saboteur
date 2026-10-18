@@ -12,6 +12,7 @@ import { SentencePassage } from "@/components/SentencePassage";
 import { SubmitDialog } from "@/components/SubmitDialog";
 import { historyReducer, initHistory } from "@/lib/flagsHistory";
 import { updatePrefs } from "@/lib/profile/profiles";
+import { normaliseLabels } from "@/lib/learning/client";
 import { recordCompletion } from "@/lib/progress/record";
 import type { Flag, RoundResult, Submission } from "@/lib/schemas";
 import { store } from "@/lib/store";
@@ -169,7 +170,10 @@ function RoundPage() {
         return;
       }
       // Progress counts once: only when this is the first result saved for the round.
-      if (store.saveResult(round.id, submission, body as RoundResult)) recordCompletion(round.id);
+      if (store.saveResult(round.id, submission, body as RoundResult)) {
+        recordCompletion(round.id);
+        void normaliseLabels();
+      }
       navigate(`/results/${round.id}`, "VERDICT");
     } catch {
       setGradeError({ message: "Couldn't reach the server. Check your connection and try again." });
