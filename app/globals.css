@@ -639,19 +639,16 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
    home desk the camera first pushes in on the clock in the photo, then cuts to the close-up. */
 .desk { transition: transform 0.55s cubic-bezier(.55,0,.25,1); }
 .front { transition: transform 0.55s cubic-bezier(.55,0,.25,1), opacity 0.25s ease; }
-/* The camera move (night desk): the footage starts on the bare photo, so it fades in over the desk while
-   the menu, the props and the scrim fade out under it (Clock.tsx, PAN_FADE). On the way back the footage
-   fades away over its last half second as they fade back in. */
-/* The props fade one by one, not as a group: a faded group would blend their multiply shadows inside it
-   (showing their white) instead of on the desk. */
+/* The camera move (night desk). The footage plays inside the desk (.desk__pan, under the props and the
+   menu), starting on the photo it was made from. As the camera moves in, the props ride the desk with it
+   and leave the frame one by one, farthest from the clock first, and the menu, which floats above the
+   desk, flies past the lens (Clock.tsx, followDesk). On the way back they come in again in reverse. */
+.desk__pan { position: absolute; inset: 0; pointer-events: none; }
+.desk__pan-video { position: absolute; max-width: none; height: auto; }
 .desk__props > * { transition: opacity 0.25s ease; }
-:root[data-clock="pan"] :is(.front, .desk__props > *) { opacity: 0; pointer-events: none; transition-duration: 0.5s; }
+:root[data-clock="pan"] .desk__props > * { pointer-events: none; }
+:root[data-clock="pan"] .front { pointer-events: none; }
 :root[data-clock="pan"][data-scene] .desk__scrim { opacity: 0; transition: opacity 0.5s ease; }
-.clock-view[data-pan] { background: none; animation: clock-fade-in 0.5s ease both; }
-.clock-view[data-pan][data-stage="pan-out"] { animation: none; }
-.clock-view[data-pan][data-leaving] { opacity: 0; transition: opacity 0.5s ease; }
-:root[data-clock="back"] :is(.front, .desk__props > *) { transition-duration: 0.5s; }
-.clock-view__pan { position: absolute; max-width: none; height: auto; }
 /* Landing: the footage ends on the close-up; the scene starts exactly where it left it and settles into
    place, the hands appear, the controls fade in. Leaving reverses it before the footage plays back. */
 .clock-view[data-landing][data-stage] { animation: none; }
@@ -795,9 +792,9 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
 @keyframes front-away { from { opacity: 1; } to { opacity: 0; translate: 0 12px; } }
 .fopen { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; pointer-events: none; perspective: 1800px; }
 .fopen__dim { position: absolute; inset: 0; background: var(--scrim-solid); opacity: 0; animation: fopen-dim 0.4s ease forwards; }
+/* Half the open spread: the cover swings out to the left, doubling the width. */
+.fopen { --w: min(44vw, 520px, 68vh); }
 .fopen__folder {
-  /* Half the open spread: the cover swings out to the left, doubling the width. */
-  --w: min(44vw, 520px, 68vh);
   position: relative; width: var(--w); transform-style: preserve-3d;
   animation: fopen-land 0.32s cubic-bezier(.2,.8,.2,1) both, fopen-slide 0.64s 0.28s cubic-bezier(.6,0,.3,1) forwards;
 }
@@ -831,6 +828,41 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
 .fopen--held .fopen__paper img { box-shadow: 0 22px 36px rgba(0, 0, 0, 0.38); }
 .fopen__fly { position: absolute; transform-origin: 0 0; }
 .fopen__fly img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* The New case and Continue folders (components/CaseChoices.tsx): a requisition form on the sheet.
+   Each row has a printed box; the current choice (moved by mouse and keys alike, so only ever one) gets
+   a pen tick drawn into it. No hover or focus styles of their own, so nothing is left lit. */
+.choice-sheet { display: flex; flex-direction: column; min-height: min(64vh, 580px); }
+.choice-sheet__list { list-style: none; margin: -21px 0 0; padding: 0; border-top: 1.5px solid var(--ink); }
+.choice-sheet__list li { border-bottom: 1px solid var(--paper-edge); }
+.choice-sheet__choice {
+  display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 0 16px; width: 100%; padding: 15px 4px 14px;
+  text-align: left; border: 0; background: none; color: var(--ink); cursor: pointer; outline: none;
+}
+.choice-sheet__box { position: relative; width: 24px; height: 24px; border: 1.5px solid var(--ink-soft); border-radius: 1px; }
+.choice-sheet__box svg { position: absolute; left: -2px; top: -9px; width: 34px; height: 34px; overflow: visible; }
+.choice-sheet__box path {
+  fill: none; stroke: var(--pen); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 44; stroke-dashoffset: 44; transition: stroke-dashoffset 0.22s cubic-bezier(.4,0,.2,1);
+}
+.choice-sheet__choice[data-current] .choice-sheet__box path { stroke-dashoffset: 0; }
+.choice-sheet__text { display: grid; gap: 3px; min-width: 0; }
+.choice-sheet__label { font-family: var(--font-display); font-weight: 760; font-stretch: 85%; font-size: clamp(22px, 2.4vw, 27px); line-height: 1.05; transition: translate 0.2s ease; }
+.choice-sheet__choice[data-current] .choice-sheet__label { translate: 3px 0; }
+.choice-sheet__no { display: inline-block; width: 2.4em; font-family: var(--font-mono); font-weight: 500; font-size: 11px; letter-spacing: 0.12em; color: var(--ink-faint); vertical-align: 0.35em; }
+.choice-sheet__hint { padding-left: 2.4em; font-family: var(--font-read); font-size: 15.5px; line-height: 1.35; color: var(--ink-soft); }
+.choice-sheet__tag { font-size: 14px; padding: 5px 9px 4px; rotate: -5deg; --stamp: var(--pen); --ink-x: 30%; --ink-y: 62%; }
+.choice-sheet__empty { display: grid; justify-items: start; gap: 18px; margin-top: 26px; }
+.choice-sheet__empty p { margin: 0; font-size: 34px; line-height: 1; color: var(--pen); rotate: -1.5deg; }
+.choice-sheet__foot { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 20px; margin-top: auto; padding-top: 26px; }
+.choice-sheet__sign { display: inline-flex; align-items: flex-end; gap: 10px; min-width: 210px; padding-bottom: 2px; border-bottom: 1px solid var(--ink-soft); }
+.choice-sheet__sign .hand { font-size: 28px; line-height: 0.9; color: #1d2a5c; rotate: -2deg; }
+@media (hover: none) { .choice-sheet__keys { display: none; } }
+@media (max-width: 560px) {
+  .choice-sheet__choice { grid-template-columns: 26px 1fr; gap: 0 12px; }
+  .choice-sheet__tag { grid-column: 2; justify-self: start; margin-top: 8px; font-size: 12px; }
+  .choice-sheet__hint { padding-left: 0; }
+  .choice-sheet__no { display: none; }
+}
 /* Arriving by the folder, the setup form takes the sheet's place instead of rising in. */
 :root[data-arrive="folder"] .casefolder.rise { animation: none; }
 
@@ -1222,3 +1254,13 @@ kbd { font-family: var(--font-mono); font-size: 12px; padding: 2px 7px; border-r
 .autopsy-intro ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 15px; max-width: 62ch; }
 .weak-card__tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
 .weak-card__tag--resolved { color: var(--catch); }
+
+/* ---------- Dead ends (components/DeadEnd.tsx): 404, 500, and the root fallback (app/global-error.tsx) ---------- */
+.dead-end { min-height: calc(100dvh - 76px); display: grid; place-items: center; padding: 24px 16px 72px; }
+.dead-end__sheet { position: relative; width: min(100%, 560px); padding: 28px clamp(22px, 5vw, 44px) 40px; rotate: -0.8deg; }
+.dead-end__title { margin: 18px 0 14px; font-size: clamp(36px, 6.5vw, 54px); color: var(--ink); }
+.dead-end__body { max-width: 44ch; font-size: 18px; line-height: 1.5; color: var(--ink-soft); }
+.dead-end__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.dead-end__note { margin: 18px 0 0; font-size: 26px; line-height: 1; color: var(--pen); rotate: -2deg; }
+.dead-end__stamp { position: absolute; top: 58px; right: clamp(10px, 4vw, 30px); font-size: clamp(22px, 4vw, 30px); rotate: 9deg; pointer-events: none; }
+@media (max-width: 520px) { .dead-end__sheet { padding-bottom: 70px; } .dead-end__stamp { top: auto; bottom: 22px; right: 14px; font-size: 17px; rotate: -7deg; } }

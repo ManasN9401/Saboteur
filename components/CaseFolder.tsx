@@ -11,7 +11,7 @@ import { useActiveProfile, useStats } from "@/lib/useStore";
  * panels are 9-sliced (globals.css), so they grow with the form without stretching the tab or corners.
  * On phones only the back panel shows.
  */
-export function CaseFolder({ label, cover, children }: { label: string; cover: ReactNode; children: ReactNode }) {
+export function CaseFolder({ label, cover, note, children }: { label: string; cover: ReactNode; note?: ReactNode; children: ReactNode }) {
   return (
     <div className="casefolder rise" data-casefolder>
       <div className="casefolder__cover">{cover}</div>
@@ -20,7 +20,11 @@ export function CaseFolder({ label, cover, children }: { label: string; cover: R
           <b>{label}</b>
         </span>
         <p className="casefolder__note hand" aria-hidden="true">
-          What should we <span>sabotage</span> today?
+          {note ?? (
+            <>
+              What should we <span>sabotage</span> today?
+            </>
+          )}
         </p>
         {children}
       </div>

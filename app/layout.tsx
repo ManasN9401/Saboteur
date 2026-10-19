@@ -5,6 +5,7 @@ import { ClockCard, TimerService } from "@/components/Clock";
 import { Nav } from "@/components/Nav";
 import { PrefsSync } from "@/components/PrefsSync";
 import { RedactionProvider } from "@/components/RedactionTransition";
+import { ServiceWorker } from "@/components/ServiceWorker";
 import { SettingsDrawer } from "@/components/SettingsDrawer";
 import { Toasts } from "@/components/Toasts";
 import { PAINT_SCRIPT } from "@/lib/prefs";
@@ -41,6 +42,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <div className="desk__photo" />
           <div className="desk__photo desk__photo--off" />
           <div className="desk__fx" />
+          {/* The clock's camera move plays here, under the props and the menu (components/Clock.tsx). */}
+          <div className="desk__pan" />
           <div className="desk__props" />
           <div className="desk__scrim" />
         </div>
@@ -55,6 +58,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <ClockCard />
         <TimerService />
         <Toasts />
+        <ServiceWorker />
       </body>
     </html>
   );

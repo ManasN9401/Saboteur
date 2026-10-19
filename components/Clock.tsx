@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { onOpenClock, openClock } from "@/lib/events";
 import { HAND, handAngles, handScale, type HandArt } from "@/lib/clockHands";
 import { plateToScreen } from "@/lib/desk";
+import { panFootage } from "@/lib/panFootage";
 import { reducedMotion } from "@/lib/prefs";
 import { ringBell, tick, unlockSound } from "@/lib/sound";
 import { subscribe } from "@/lib/storage/kv";
@@ -197,8 +199,114 @@ const CLOSE = { w: 1920, h: 1080, hubX: 962.5, hubY: 551.5, track: 305.2 };
 const PAN = { w: 1920, h: 1080, scale: 1.3948, tx: 0.1, ty: 4.5 };
 // The move plays at night with the lamp on (it starts on that photo); otherwise opening the clock zooms.
 export const PAN_ON = true;
-/** Seconds the footage takes to fade in over the desk (and away again at the end of the way back). */
-const PAN_FADE = 0.5;
+// How the camera moves over the footage's first half second, measured against the night photo
+// (scripts/assets/batch12.py, align): [seconds, scale, tx, ty], frame = photo × scale + (tx, ty) in the
+// footage's pixels. After this the camera tilts down to the clock and no flat transform follows it, so the
+// props on the desk are gone by then.
+const TRACK: [number, number, number, number][] = [
+  [0, 1.3958, 0.1, 4.3],
+  [0.093, 1.3959, -0.7, 4.8],
+  [0.139, 1.3976, -2.9, 5.7],
+  [0.186, 1.4018, -8.4, 9.3],
+  [0.232, 1.408, -15.1, 12.5],
+  [0.278, 1.418, -27.8, 20],
+  [0.325, 1.4312, -44, 27.3],
+  [0.371, 1.4488, -75, 48.7],
+  [0.418, 1.4761, -112.6, 64],
+  [0.464, 1.512, -154.3, 71.7],
+  [0.51, 1.5533, -215, 92.5],
+];
+const TRACK_END = TRACK[TRACK.length - 1][0];
+/** Each prop fades out over this long, starting earlier the farther it is from the clock. */
+const PROP_FADE = 0.18;
+const PASS_SPREAD = 0.24;
+const SHADOW_FADE = 0.14;
+/** The menu's pass, over the footage's nearly still first moments. */
+const FRONT_PASS = 0.42;
+/** How far the menu swells as it passes. Chrome draws an animated layer at its largest scale, so a big
+ *  swell means redrawing the whole menu (and every folder's shadow) much larger as the move starts. */
+const FRONT_SCALE = 1.4;
+
+// The props' animations from the way in, played backwards on the way out.
+let passAnims: Animation[] = [];
+
+/**
+ * As the camera moves in, the props on the desk stay on the desk: each follows the footage's measured
+ * zoom and drift, and leaves the frame in turn, the farthest from the clock first; the menu flies past the
+ * lens. All of it starts when the footage does, on the same clock. On the way back the same animations
+ * play in reverse, so everything comes back as the footage ends, pinned to the desk, the nearest first.
+ */
+function followDesk(pan: Rect) {
+  passAnims.forEach((a) => a.cancel());
+  const cs = getComputedStyle(document.documentElement);
+  const cx = parseFloat(cs.getPropertyValue("--clock-x")) || window.innerWidth;
+  const cy = parseFloat(cs.getPropertyValue("--clock-y")) || 0;
+  const k = pan.width / PAN.w; // footage pixels to screen pixels
+  const [, s0, x0, y0] = TRACK[0];
+  // Visible props only (each photo's version is a separate element; the others are display: none).
+  const items = [...document.querySelectorAll<HTMLElement>(".desk__props > *")].filter((el) => el.getClientRects().length);
+  // A shadow leaves with the prop that casts it (the next prop in the list).
+  const owner = items.map((el, i) => (el.classList.contains("desk-prop-shadow") ? (items.slice(i + 1).find((x) => !x.classList.contains("desk-prop-shadow")) ?? el) : el));
+  const boxes = owner.map((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width ? r : (el.firstElementChild?.getBoundingClientRect() ?? r); // a positioned wrapper
+  });
+  const dist = boxes.map((r) => Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy));
+  const far = Math.max(1, ...dist);
+  passAnims = items.map((el, i) => {
+    // A shadow multiplies onto the photo, which it can't do from a layer of its own while it moves (it
+    // shows as a dark box): it just fades as the camera starts, before its prop moves off.
+    if (el.classList.contains("desk-prop-shadow")) return el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SHADOW_FADE * 1000, fill: "forwards" });
+    const start = (1 - dist[i] / far) * PASS_SPREAD;
+    // Animated with the translate and scale properties, about the prop's own transform-origin (where its
+    // rotate turns it), so nothing about its resting place changes: translate acts in screen space and a
+    // uniform scale turns with the rotation. A point x of the desk must land at a + r·x; with the origin
+    // at o that is translate a + (r − 1)·o.
+    const cso = getComputedStyle(el).transformOrigin.split(" ").map(parseFloat);
+    const ox = el.offsetLeft + (cso[0] || 0);
+    const oy = el.offsetTop + (cso[1] || 0);
+    const frames = TRACK.map(([t, sc, tx, ty]) => {
+      const r = sc / s0;
+      // Where a point of the photo is now: screen = (pan.left + k·tx) + r·(screen₀ − pan.left − k·x0).
+      const ax = pan.left + k * tx - r * (pan.left + k * x0);
+      const ay = pan.top + k * ty - r * (pan.top + k * y0);
+      const opacity = Math.min(1, Math.max(0, 1 - (t - start) / PROP_FADE));
+      return { offset: t / TRACK_END, opacity, translate: `${(ax + (r - 1) * ox).toFixed(1)}px ${(ay + (r - 1) * oy).toFixed(1)}px`, scale: r.toFixed(4) };
+    });
+    return el.animate(frames, { duration: TRACK_END * 1000, fill: "forwards" });
+  });
+  // The menu floats above the desk, nearer the lens: it swells towards the clock and is gone
+  // before the camera really starts to move (its transform-origin is the clock: globals.css).
+  const front = document.querySelector<HTMLElement>(".front");
+  if (front)
+    passAnims.push(
+      front.animate(
+        // Transform and opacity only: the compositor runs them, so the pass can't stall a frame (a blur
+        // over the whole menu did).
+        [{ transform: "none", opacity: 1 }, { opacity: 1, offset: 0.25 }, { transform: `scale(${FRONT_SCALE})`, opacity: 0 }],
+        { duration: FRONT_PASS * 1000, easing: "cubic-bezier(.45,0,.8,.45)", fill: "forwards" },
+      ),
+    );
+}
+
+/** The way back: the props' way-in animations, backwards, ending as the footage does. */
+function returnDesk() {
+  for (const a of passAnims) {
+    a.playbackRate = -1;
+    a.play();
+  }
+}
+
+function clearDesk() {
+  passAnims.forEach((a) => a.cancel());
+  passAnims = [];
+  for (const el of document.querySelectorAll<HTMLElement>(".desk__props > *")) el.style.willChange = "";
+}
+
+/** Before the move: the props on their own layers, so their pass is composited. */
+function layerDesk() {
+  for (const el of document.querySelectorAll<HTMLElement>(".desk__props > :not(.desk-prop-shadow)")) el.style.willChange = "transform, opacity";
+}
 
 interface ViewLayout {
   wide: boolean;
@@ -232,7 +340,8 @@ function viewLayout(vw: number, vh: number): ViewLayout {
 /** The camera move plays on the night desk with the lamp on (it was made from that photo). */
 function panRect(): Rect | null {
   const root = document.documentElement;
-  if (!PAN_ON || !document.querySelector(".desk-clock-hit") || root.dataset.theme !== "dark" || root.dataset.lamp === "off" || root.dataset.desk === "plain" || reducedMotion()) return null;
+  if (!PAN_ON || !panFootage() || !document.querySelector(".desk__pan") || !document.querySelector(".desk-clock-hit")) return null;
+  if (root.dataset.theme !== "dark" || root.dataset.lamp === "off" || root.dataset.desk === "plain" || reducedMotion()) return null;
   const origin = plateToScreen(-PAN.tx / PAN.scale, -PAN.ty / PAN.scale);
   return { left: origin.x, top: origin.y, width: (PAN.w / PAN.scale) * origin.scale };
 }
@@ -287,8 +396,6 @@ export function ClockCard() {
   const [stage, setStage] = useState<Stage | null>(null);
   const [layout, setLayout] = useState<ViewLayout | null>(null);
   const [pan, setPan] = useState<Rect | null>(null);
-  // The way back's last half second: the footage fades away as the desk comes back.
-  const [leaving, setLeaving] = useState(false);
   const t = useTimer();
   const open = stage === "in";
   // Refresh often enough that the seconds change on time (a countdown's seconds aren't the clock's).
@@ -309,46 +416,57 @@ export function ClockCard() {
 
   const close = () => setStage((st) => (st === "in" ? (pan ? "settle-out" : "out") : st));
 
-  // The camera move: the footage starts on the bare desk photo, so it fades in over the desk while the
-  // menu, the props and the scrim fade out under it (its first half second barely moves, so the two
-  // don't ghost). Played backwards (a reversed copy) on the way out, handing back the same way: over its
-  // last half second it fades away as everything fades back in.
+  // The camera move. The footage plays inside the desk (the .desk__pan slot, under the props and the
+  // menu), starting on the photo it was made from, so nothing has to cross-fade: the props and the menu
+  // leave the frame over it one by one (followDesk), and come back the same way at the end of the way back.
   useEffect(() => {
     if (stage !== "pan-in" && stage !== "pan-out") return;
     const root = document.documentElement;
     root.dataset.clock = "pan";
+    if (stage === "pan-in") layerDesk();
     const v = video.current;
     let handBack = 0;
+    // Never hang on a frozen frame: if the footage hasn't started within a second, or stalls once it
+    // has, the move ends where it would have ended.
+    let safety = window.setTimeout(() => next(), 1000);
     const next = () => (stage === "pan-in" ? setStage("in") : finishPan());
     const finishPan = () => {
       delete root.dataset.clock;
+      clearDesk();
       setStage(null);
     };
-    v?.play()
-      .then(() => {
-        if (stage !== "pan-out" || !v) return;
-        handBack = window.setTimeout(() => {
-          root.dataset.clock = "back"; // the desk fades back in (globals.css) under the fading footage
-          setLeaving(true);
-        }, Math.max(0, (v.duration - PAN_FADE) * 1000));
-      })
-      .catch(next);
-    // If the footage can't play (not loaded, or blocked), don't leave anyone stranded on the desk.
-    const safety = window.setTimeout(next, 4000);
+    const go = () => {
+      if (!v) return next();
+      v.play()
+        .then(() => {
+          const ms = (v.duration || 1.5) * 1000;
+          window.clearTimeout(safety);
+          safety = window.setTimeout(next, ms + 1000);
+          if (stage === "pan-in" && pan) followDesk(pan);
+          if (stage === "pan-out")
+            handBack = window.setTimeout(() => {
+              root.dataset.clock = "back";
+              returnDesk();
+            }, Math.max(0, ms - TRACK_END * 1000));
+        })
+        .catch(next);
+    };
+    // From memory the first frame is there almost at once; wait for it so the move never starts frozen.
+    if (v && v.readyState < 2) v.addEventListener("loadeddata", go, { once: true });
+    else go();
     v?.addEventListener("ended", next);
     return () => {
       window.clearTimeout(handBack);
       window.clearTimeout(safety);
+      v?.removeEventListener("loadeddata", go);
       v?.removeEventListener("ended", next);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `pan` is fixed for the whole move
   }, [stage]);
 
   useEffect(() => {
     if (stage !== "settle-out") return;
-    const id = window.setTimeout(() => {
-      setLeaving(false);
-      setStage("pan-out");
-    }, 400);
+    const id = window.setTimeout(() => setStage("pan-out"), 400);
     return () => window.clearTimeout(id);
   }, [stage]);
 
@@ -380,22 +498,22 @@ export function ClockCard() {
   }, [stage]);
 
   if (stage && pan && (stage === "pan-in" || stage === "pan-out")) {
-    const forward = stage === "pan-in";
-    return (
-      <div className="clock-view" data-pan="" data-stage={stage} data-leaving={leaving || undefined} aria-hidden="true">
-        <video
-          key={stage}
-          ref={video}
-          className="clock-view__pan"
-          style={{ left: pan.left, top: pan.top, width: pan.width }}
-          muted
-          playsInline
-          preload="auto"
-        >
-          <source src={`/assets/fx/clock-pan${forward ? "" : "-back"}.webm`} type="video/webm" />
-          <source src={`/assets/fx/clock-pan${forward ? "" : "-back"}.mp4`} type="video/mp4" />
-        </video>
-      </div>
+    const footage = panFootage();
+    const host = document.querySelector<HTMLElement>(".desk__pan");
+    if (!footage || !host) return null;
+    return createPortal(
+      <video
+        key={stage}
+        ref={video}
+        className="desk__pan-video"
+        style={{ left: pan.left, top: pan.top, width: pan.width }}
+        src={stage === "pan-in" ? footage.forward : footage.back}
+        muted
+        playsInline
+        preload="auto"
+        aria-hidden="true"
+      />,
+      host,
     );
   }
 

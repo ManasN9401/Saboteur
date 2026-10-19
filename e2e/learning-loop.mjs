@@ -1,5 +1,5 @@
 // v0.6 learning loop, end to end (V06-08): seeded profile → dossier numbers → Drill this → targeted round →
-// reveal insight → Review case from the menu.
+// reveal insight → Review case from the menu's New case folder.
 // Run against a dev or production server started with SABOTEUR_ENGINE=offline:
 //   BASE=http://localhost:3000 node e2e/learning-loop.mjs /tmp/shots
 // Playwright is resolved from PLAYWRIGHT (a path to its index.mjs) or the "playwright" package.
@@ -49,12 +49,15 @@ await p.screenshot({ path: `${out}/e2e-02-reveal.png` });
 const stats = await p.evaluate(() => { const k = Object.keys(localStorage).find(k => k.endsWith(':stats')); return JSON.parse(localStorage.getItem(k)); });
 ok(stats.learning && stats.learning.counted.length === 15, `learning: 15 rounds counted (${stats.learning?.counted.length})`);
 
-// 4. The menu's Review case folder → a review round.
+// 4. The menu's New case folder → its Review case choice → a review round.
 await p.goto(BASE + '/?skip=1'); await p.waitForTimeout(2000); await p.keyboard.press('Space'); await p.waitForTimeout(1500);
-const review = p.locator('.folder', { hasText: 'Review case' });
-ok(await review.count() === 1, 'menu: Review case folder');
-await review.hover(); await p.waitForTimeout(400);
-ok(/due/i.test(await p.locator('#front-hint').innerText()), `menu: hint "${await p.locator('#front-hint').innerText()}"`);
+ok(await p.locator('.folder').count() === 5, `menu: five folders (${await p.locator('.folder').count()})`);
+await p.locator('.folder', { hasText: 'New case' }).click();
+await p.waitForURL(/\/new/, { timeout: 8000 });
+const review = p.locator('.choice-sheet__choice', { hasText: 'Review case' });
+await review.waitFor({ timeout: 4000 }); await p.waitForTimeout(400);
+ok(await review.count() === 1, 'menu: Review case in the New case folder');
+ok(/due/i.test(await review.innerText()), `menu: hint "${(await review.innerText()).replace(/\n/g, ' · ')}"`);
 await p.screenshot({ path: `${out}/e2e-03-menu.png` });
 await review.click();
 await p.waitForURL(/\/play/, { timeout: 15000 }); await p.waitForTimeout(400);

@@ -14,7 +14,8 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   // blob: is the autopsy's local preview of a photo; data: the CSS's inline textures.
   "img-src 'self' data: blob:",
-  "media-src 'self'",
+  // blob: is the clock's camera move, played from memory (lib/panFootage.ts).
+  "media-src 'self' blob:",
   "font-src 'self'",
   `connect-src 'self'${dev ? " ws: wss:" : ""}`,
   "worker-src 'self' blob:",
@@ -44,6 +45,8 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: securityHeaders },
       // API answers are personal to the request: never cached by a shared proxy.
       { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] },
+      // The service worker is checked for updates on every visit, never served from a cache.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache" }] },
     ];
   },
   cacheComponents: true,

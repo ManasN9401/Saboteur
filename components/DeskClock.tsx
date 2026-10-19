@@ -9,6 +9,7 @@ import { openClock } from "@/lib/events";
 import { reducedMotion } from "@/lib/prefs";
 import { leftOf } from "@/lib/timer";
 import { HAND, handAngles, handScale, type HandArt } from "@/lib/clockHands";
+import { loadPan } from "@/lib/panFootage";
 import { PAN_ON, useNow, useTimer } from "./Clock";
 
 // The alarm clock in the desk photos (top right). Its painted hands are removed by
@@ -40,13 +41,9 @@ function hand(art: HandArt, scale: number, angle: number) {
   return <image href={art.src} x={-art.px * scale} y={-art.py * scale} width={art.w * scale} height={art.h * scale} transform={`rotate(${angle})`} />;
 }
 
-let fetched = false;
-/** Fetch the camera move's footage (both ways) when the clock is first pointed at, so it plays at once. */
+/** Load the camera move's footage (lib/panFootage) once the clock is pointed at, if idle loading hasn't yet. */
 function prefetchPan() {
-  if (!PAN_ON || fetched || document.documentElement.dataset.theme !== "dark") return;
-  fetched = true;
-  const ext = document.createElement("video").canPlayType("video/webm") ? "webm" : "mp4";
-  for (const name of ["clock-pan", "clock-pan-back"]) fetch(`/assets/fx/${name}.${ext}`, { priority: "low" } as RequestInit).catch(() => {});
+  if (PAN_ON && document.documentElement.dataset.theme === "dark") loadPan();
 }
 
 const box = (b: readonly [number, number, number, number]) => [b[0] * S, b[1] * S, b[2] * S, b[3] * S] as const;
@@ -74,7 +71,14 @@ export function DeskClock() {
     };
     place();
     window.addEventListener("resize", place);
+    // At night the clock opens with the camera move: load its footage once the desk has settled.
+    const idle = window.setTimeout(() => {
+      if (!PAN_ON || document.documentElement.dataset.theme !== "dark") return;
+      if ("requestIdleCallback" in window) window.requestIdleCallback(() => loadPan(), { timeout: 4000 });
+      else loadPan();
+    }, 1500);
     return () => {
+      window.clearTimeout(idle);
       window.removeEventListener("resize", place);
       setHost(null);
     };

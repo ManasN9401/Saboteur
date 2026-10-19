@@ -16,12 +16,13 @@ export function preloadFolderOpen() {
 }
 
 /**
- * The transition into a new case: a manila folder lands on the desk, its cover swings open on the
- * spine, and the blank sheet inside lifts towards you. Built in code from two stills (a 3D flip),
- * since generated footage of a folder opening wasn't usable.
+ * A folder from the drawer opening on the desk: it lands, its cover swings open on the spine, and the
+ * sheet inside lifts towards you. Built in code from two stills (a 3D flip), since generated footage of
+ * a folder opening wasn't usable. The pages it opens into (the setup form, and the New case and Continue
+ * folders: components/CaseChoices.tsx) are that folder lying open.
  *
- * The home page is hidden the moment we navigate, so the open folder is copied out to <body> and
- * held there until the setup page calls `landFolderSheet`, which flies the sheet onto the form.
+ * The home page is hidden the moment we navigate, so the open folder is copied out to <body> and held
+ * there until the page calls `landFolderSheet`, which flies the sheet onto that page's sheet.
  */
 export function FolderOpen({ onNavigate }: { onNavigate: () => void }) {
   const root = useRef<HTMLDivElement>(null);
@@ -30,7 +31,7 @@ export function FolderOpen({ onNavigate }: { onNavigate: () => void }) {
     const go = window.setTimeout(() => {
       const node = root.current;
       if (node) hold(node);
-      document.documentElement.dataset.arrive = "folder"; // the setup form skips its entrance (see globals.css)
+      document.documentElement.dataset.arrive = "folder"; // the page skips its entrance (see globals.css)
       onNavigate();
     }, NAVIGATE_AT);
     return () => window.clearTimeout(go);
@@ -104,6 +105,10 @@ export function landFolderSheet(form: HTMLElement) {
   Object.assign(fly.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` });
   scene.append(fly);
   sheet.style.visibility = "hidden";
+  // Next keeps a visited page alive, so this may be a return visit: clear what the last landing left
+  // on it first, or its finished fade-in (still holding opacity 1) shows the page behind the folder.
+  dropScripted(page);
+  if (notes) dropScripted(notes);
   page.style.opacity = "0";
   if (notes) notes.style.opacity = "0";
 
@@ -120,12 +125,13 @@ export function landFolderSheet(form: HTMLElement) {
   window.setTimeout(() => {
     const swap = { duration: 220, easing: "ease-in-out", fill: "forwards" } as const;
     // Clearing data-arrive restarts the page's entrance; it has already arrived, so skip to the end.
+    const reveal = page.animate({ opacity: [0, 1] }, swap);
     const done = () => {
       page.style.opacity = "";
+      reveal.cancel(); // nothing left holding the page's opacity for the next visit
       release();
       for (const a of page.getAnimations()) a.finish();
     };
-    page.animate({ opacity: [0, 1] }, swap);
     folder.animate({ opacity: [1, 0] }, swap);
     fly.animate({ opacity: [1, 0] }, swap).finished.then(done, done);
     if (notes) {
@@ -133,4 +139,9 @@ export function landFolderSheet(form: HTMLElement) {
       notes.animate({ opacity: [0, 1], translate: ["0 6px", "0 0"] }, { duration: 380, delay: 200, easing: "ease-out", fill: "backwards" });
     }
   }, 380);
+}
+
+/** Cancel animations started from script on an element (not its CSS animations and transitions). */
+function dropScripted(el: HTMLElement) {
+  for (const a of el.getAnimations()) if (!(a instanceof CSSAnimation) && !(a instanceof CSSTransition)) a.cancel();
 }
