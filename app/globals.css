@@ -639,12 +639,18 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
    home desk the camera first pushes in on the clock in the photo, then cuts to the close-up. */
 .desk { transition: transform 0.55s cubic-bezier(.55,0,.25,1); }
 .front { transition: transform 0.55s cubic-bezier(.55,0,.25,1), opacity 0.25s ease; }
-/* The camera move (night desk): the menu, the props and the scrim clear away, leaving the bare photo the
-   footage starts from; they come back as it ends on the way out. */
-.desk__props { transition: opacity 0.25s ease; }
-:root[data-clock="pan"] :is(.front, .desk__props) { opacity: 0; pointer-events: none; }
-:root[data-clock="pan"][data-scene] .desk__scrim { opacity: 0; transition: opacity 0.25s ease; }
-.clock-view[data-pan] { background: none; animation: none; }
+/* The camera move (night desk): the footage starts on the bare photo, so it fades in over the desk while
+   the menu, the props and the scrim fade out under it (Clock.tsx, PAN_FADE). On the way back the footage
+   fades away over its last half second as they fade back in. */
+/* The props fade one by one, not as a group: a faded group would blend their multiply shadows inside it
+   (showing their white) instead of on the desk. */
+.desk__props > * { transition: opacity 0.25s ease; }
+:root[data-clock="pan"] :is(.front, .desk__props > *) { opacity: 0; pointer-events: none; transition-duration: 0.5s; }
+:root[data-clock="pan"][data-scene] .desk__scrim { opacity: 0; transition: opacity 0.5s ease; }
+.clock-view[data-pan] { background: none; animation: clock-fade-in 0.5s ease both; }
+.clock-view[data-pan][data-stage="pan-out"] { animation: none; }
+.clock-view[data-pan][data-leaving] { opacity: 0; transition: opacity 0.5s ease; }
+:root[data-clock="back"] :is(.front, .desk__props > *) { transition-duration: 0.5s; }
 .clock-view__pan { position: absolute; max-width: none; height: auto; }
 /* Landing: the footage ends on the close-up; the scene starts exactly where it left it and settles into
    place, the hands appear, the controls fade in. Leaving reverses it before the footage plays back. */
@@ -658,6 +664,8 @@ input[type="range"].confidence::-moz-range-thumb { width: 16px; height: 16px; bo
 @keyframes clock-unland { to { transform: var(--from); } }
 @keyframes clock-fade-in { from { opacity: 0; } }
 :root[data-clock="zoom"] :is(.desk, .front) { transform: scale(2.6); }
+/* The menu fades as the camera pushes past it (the props go with the desk, under the close-up). */
+:root[data-clock="zoom"] .front { opacity: 0; transition: transform 0.55s cubic-bezier(.55,0,.25,1), opacity 0.4s ease; }
 :root:has(.desk-clock-hit) :is(.desk, .front) { transform-origin: var(--clock-x) var(--clock-y); }
 .clock-view { position: fixed; inset: 0; z-index: 60; overflow: hidden; background: radial-gradient(120% 90% at 30% 40%, #3a2717, #140d07 70%); }
 .clock-view[data-stage="in"] { animation: clock-view-in 0.6s ease both; }

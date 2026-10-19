@@ -197,6 +197,8 @@ const CLOSE = { w: 1920, h: 1080, hubX: 962.5, hubY: 551.5, track: 305.2 };
 const PAN = { w: 1920, h: 1080, scale: 1.3948, tx: 0.1, ty: 4.5 };
 // The move plays at night with the lamp on (it starts on that photo); otherwise opening the clock zooms.
 export const PAN_ON = true;
+/** Seconds the footage takes to fade in over the desk (and away again at the end of the way back). */
+const PAN_FADE = 0.5;
 
 interface ViewLayout {
   wide: boolean;
@@ -285,6 +287,8 @@ export function ClockCard() {
   const [stage, setStage] = useState<Stage | null>(null);
   const [layout, setLayout] = useState<ViewLayout | null>(null);
   const [pan, setPan] = useState<Rect | null>(null);
+  // The way back's last half second: the footage fades away as the desk comes back.
+  const [leaving, setLeaving] = useState(false);
   const t = useTimer();
   const open = stage === "in";
   // Refresh often enough that the seconds change on time (a countdown's seconds aren't the clock's).
@@ -305,24 +309,35 @@ export function ClockCard() {
 
   const close = () => setStage((st) => (st === "in" ? (pan ? "settle-out" : "out") : st));
 
-  // The camera move: the menu, the props on the desk and the scrim clear away, then the footage plays
-  // over the desk photo it starts from. Played backwards (a reversed copy) on the way out.
+  // The camera move: the footage starts on the bare desk photo, so it fades in over the desk while the
+  // menu, the props and the scrim fade out under it (its first half second barely moves, so the two
+  // don't ghost). Played backwards (a reversed copy) on the way out, handing back the same way: over its
+  // last half second it fades away as everything fades back in.
   useEffect(() => {
     if (stage !== "pan-in" && stage !== "pan-out") return;
     const root = document.documentElement;
     root.dataset.clock = "pan";
     const v = video.current;
+    let handBack = 0;
     const next = () => (stage === "pan-in" ? setStage("in") : finishPan());
     const finishPan = () => {
       delete root.dataset.clock;
       setStage(null);
     };
-    const begin = window.setTimeout(() => v?.play().catch(next), stage === "pan-in" ? 220 : 0);
+    v?.play()
+      .then(() => {
+        if (stage !== "pan-out" || !v) return;
+        handBack = window.setTimeout(() => {
+          root.dataset.clock = "back"; // the desk fades back in (globals.css) under the fading footage
+          setLeaving(true);
+        }, Math.max(0, (v.duration - PAN_FADE) * 1000));
+      })
+      .catch(next);
     // If the footage can't play (not loaded, or blocked), don't leave anyone stranded on the desk.
     const safety = window.setTimeout(next, 4000);
     v?.addEventListener("ended", next);
     return () => {
-      window.clearTimeout(begin);
+      window.clearTimeout(handBack);
       window.clearTimeout(safety);
       v?.removeEventListener("ended", next);
     };
@@ -330,7 +345,10 @@ export function ClockCard() {
 
   useEffect(() => {
     if (stage !== "settle-out") return;
-    const id = window.setTimeout(() => setStage("pan-out"), 400);
+    const id = window.setTimeout(() => {
+      setLeaving(false);
+      setStage("pan-out");
+    }, 400);
     return () => window.clearTimeout(id);
   }, [stage]);
 
@@ -364,7 +382,7 @@ export function ClockCard() {
   if (stage && pan && (stage === "pan-in" || stage === "pan-out")) {
     const forward = stage === "pan-in";
     return (
-      <div className="clock-view" data-pan="" data-stage={stage} aria-hidden="true">
+      <div className="clock-view" data-pan="" data-stage={stage} data-leaving={leaving || undefined} aria-hidden="true">
         <video
           key={stage}
           ref={video}
